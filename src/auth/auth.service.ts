@@ -1,16 +1,14 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { UsersService } from "../users/users.service";
 import { JwtService } from "@nestjs/jwt";
 import { IUser } from "src/users/users.interface";
-import { genSaltSync, hashSync } from "bcryptjs";
 import { RegisterUserDto } from "src/users/dto/create-user.dto";
-import { User, UserDocument } from "src/users/schemas/user.schema";
-import { InjectModel } from "@nestjs/mongoose";
-import { SoftDeleteModel } from "soft-delete-plugin-mongoose";
 import { ConfigService } from "@nestjs/config";
 import ms from "ms";
 import { Response } from "express";
 import { RolesService } from "src/roles/roles.service";
+import { FaceRecognitionService } from "src/face-recognition/face-recognition.service";
+
 
 @Injectable()
 export class AuthService {
@@ -19,7 +17,8 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
         private rolesService: RolesService,
-    ) {}
+        private faceRecognitionService: FaceRecognitionService,
+    ) { }
 
     async validateUser(username: string, pass: string): Promise<any> {
         const user = await this.usersService.findOneByUsername(username);
@@ -44,8 +43,22 @@ export class AuthService {
         }
         return null;
     }
+    async validateFace(file: Express.Multer.File) {
+        const { buffer } = file;
+        const faceDescriptor = await this.faceRecognitionService.processFaceFromBuffer(buffer);
 
-    async login(user: IUser, response: Response) {
+        const users = await this.usersService.findForLogin() as any;
+        for (const user of users) {
+            const distance = this.faceRecognitionService.compareFaces(user.faceDescriptor, faceDescriptor);
+            if (distance < 0.6) {
+                return user;
+            }
+        }
+
+        return null;
+    }
+
+    async login1(user: IUser, response: Response) {
         const { _id, name, email, role, permissions } = user;
         const payload = {
             sub: "token login",
@@ -80,12 +93,98 @@ export class AuthService {
         };
     }
 
-    async register(registerUserDto: RegisterUserDto) {
-        let newUser = await this.usersService.register(registerUserDto);
+    async login(file: Express.Multer.File, response: Response) {
+        if (!file) {
+            throw new BadRequestException('Image is required');
+        }
+        // Xử lý khuôn mặt từ buffer thay vì lưu file
+        const faceDescriptorCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+        if (!faceDescriptorCompare) throw new UnauthorizedException('Không nhận diện được khuôn mặt');
+
+        const users = await this.usersService.findForLogin() as any;
+        let matchedUser = null;
+        // So sánh khuôn mặt với dữ liệu trong DB
+        for (const user of users) {
+            for (const storedDescriptor of user.faceDescriptor) {
+                const distance = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptorCompare);
+                if (distance < 0.6) { // Ngưỡng nhận diện (có thể điều chỉnh)
+                    matchedUser = user;
+                    break;
+                }
+            }
+            if (matchedUser) break;
+        }
+
+
+        if (!matchedUser) throw new UnauthorizedException('Face not recognized');
+
+        const userRole = matchedUser.role as unknown as {
+            _id: string;
+            name: string;
+        };
+        const roleDetails = await this.rolesService.findOne(userRole._id);
+
+        if (!roleDetails) {
+            throw new UnauthorizedException('Role not found');
+        }
+
+        const payload = {
+            sub: "token login",
+            iss: "from server",
+            _id: matchedUser._id,
+            name: matchedUser.name,
+            email: matchedUser.email,
+            role: {
+                _id: roleDetails._id,
+                name: roleDetails.name,
+            },
+        };
+
+        const refresh_token = this.createRefreshToken(payload);
+        // Update user with refresh token
+        await this.usersService.updateUserToken(refresh_token, matchedUser._id);
+
+        // Set refresh_token as cookies
+        response.cookie("refresh_token", refresh_token, {
+            httpOnly: true,
+            maxAge:
+                ms(this.configService.get<string>("JWT_REFRESH_EXPIRE")) * 1000,
+        });
+
+        return {
+            access_token: this.jwtService.sign(payload),
+            user: {
+                _id: matchedUser._id,
+                name: matchedUser.name,
+                email: matchedUser.email,
+                role: {
+                    _id: roleDetails._id,
+                    name: roleDetails.name,
+                },
+                permissions: roleDetails.permissions ?? [],
+            },
+        };
+    }
+
+    async register(file: Express.Multer.File, registerUserDto: RegisterUserDto) {
+        let newUser = await this.usersService.register(file, registerUserDto);
         return {
             _id: newUser?.id,
             createdAt: newUser?.createdAt,
         };
+    }
+
+    async findMatchedUser(faceDescriptorCompare: number[]) {
+        const users = await this.usersService.findForLogin();
+        for (const user of users) {
+            for (const storedDescriptor of user.faceDescriptor) {
+                const distance = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptorCompare);
+                if (distance < 0.6) { // Ngưỡng nhận diện (có thể điều chỉnh)
+                    return user;
+                }
+            }
+        }
+        return null;
     }
 
     createRefreshToken = (payload: any) => {

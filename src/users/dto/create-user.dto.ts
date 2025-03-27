@@ -68,4 +68,7 @@ export class RegisterUserDto {
 
     @IsNotEmpty({ message: "Address không được để trống" })
     address: string;
+
+    image?: string;
+    faceDescriptor?: number[][];
 }

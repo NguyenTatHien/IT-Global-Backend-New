@@ -15,4 +15,5 @@ export interface IUser {
         apiPath: string;
         module: string;
     }[];
+    faceDescriptor: number[][];
 }

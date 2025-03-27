@@ -36,6 +36,12 @@ export class User {
     @Prop()
     refreshToken: string;
 
+    @Prop({ type: [[Number]], required: true })
+    faceDescriptor: number[][];
+
+    @Prop({ type: String })
+    faceId: string;
+
     @Prop({ type: Object })
     createdBy: {
         _id: mongoose.Schema.Types.ObjectId;

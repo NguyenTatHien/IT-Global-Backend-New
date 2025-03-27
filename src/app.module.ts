@@ -16,6 +16,7 @@ import { DatabasesModule } from "./databases/databases.module";
 import { SubscribersModule } from "./subscribers/subscribers.module";
 import { MailModule } from "./mail/mail.module";
 import { ScheduleModule } from "@nestjs/schedule";
+import { FaceRecognitionModule } from './face-recognition/face-recognition.module';
 
 @Module({
     imports: [
@@ -45,6 +46,7 @@ import { ScheduleModule } from "@nestjs/schedule";
         DatabasesModule,
         SubscribersModule,
         MailModule,
+        FaceRecognitionModule,
     ],
     controllers: [AppController],
     providers: [AppService],

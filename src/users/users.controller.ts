@@ -17,7 +17,7 @@ import { IUser } from "./users.interface";
 
 @Controller("users")
 export class UsersController {
-    constructor(private readonly usersService: UsersService) {}
+    constructor(private readonly usersService: UsersService) { }
 
     @Post()
     @ResponseMessage("Create a new User")

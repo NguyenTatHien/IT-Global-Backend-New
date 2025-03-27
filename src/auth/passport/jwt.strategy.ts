@@ -1,6 +1,6 @@
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PassportStrategy } from "@nestjs/passport";
-import { Injectable } from "@nestjs/common";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { IUser } from "src/users/users.interface";
 import { RolesService } from "src/roles/roles.service";
@@ -20,11 +20,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     async validate(payload: IUser) {
         const { _id, name, email, role } = payload;
+
+        if (!role) {
+            throw new UnauthorizedException('Role is missing or invalid in JWT payload');
+        }
+
         const userRole = role as unknown as {
             _id: string;
             name: string;
         };
         const temp = (await this.rolesService.findOne(userRole._id)).toObject();
+        if (!temp) {
+            throw new UnauthorizedException('Role not found')
+        }
 
         return {
             _id,

@@ -3,7 +3,7 @@ import { CreateUserDto, RegisterUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { InjectModel } from "@nestjs/mongoose";
 import { User as UserM, UserDocument } from "./schemas/user.schema";
-import mongoose, { Model } from "mongoose";
+import mongoose from "mongoose";
 import { compareSync, genSaltSync, hashSync } from "bcryptjs";
 import { SoftDeleteModel } from "soft-delete-plugin-mongoose";
 import { User } from "src/decorator/customize";
@@ -11,6 +11,10 @@ import { IUser } from "./users.interface";
 import aqp from "api-query-params";
 import { Role, RoleDocument } from "src/roles/schemas/role.schema";
 import { USER_ROLE } from "src/databases/sample";
+import * as fs from 'fs';
+import * as path from 'path';
+import { FaceRecognitionService } from "src/face-recognition/face-recognition.service";
+
 
 @Injectable()
 export class UsersService {
@@ -20,7 +24,9 @@ export class UsersService {
 
         @InjectModel(Role.name)
         private roleModel: SoftDeleteModel<RoleDocument>,
-    ) {}
+
+        private faceRecognitionService: FaceRecognitionService
+    ) { }
 
     getHashPassword = (password: string) => {
         const salt = genSaltSync(10);
@@ -58,7 +64,29 @@ export class UsersService {
         return newUser;
     }
 
-    async register(user: RegisterUserDto) {
+    // async register(user: RegisterUserDto) {
+    //     const { name, email, password, age, gender, address } = user;
+    //     const isExistEmail = await this.userModel.findOne({ email });
+    //     if (isExistEmail) {
+    //         throw new BadRequestException(
+    //             `Email ${email} đã tồn tại trên hệ thống. Vui lòng sử dụng email khác`,
+    //         );
+    //     }
+    //     const userRole = await this.roleModel.findOne({ name: USER_ROLE });
+    //     const hashPassword = this.getHashPassword(password);
+    //     let newRegister = await this.userModel.create({
+    //         name,
+    //         email,
+    //         password: hashPassword,
+    //         age,
+    //         gender,
+    //         address,
+    //         role: userRole?._id,
+    //     });
+    //     return newRegister;
+    // }
+
+    async register(file: Express.Multer.File, user: RegisterUserDto) {
         const { name, email, password, age, gender, address } = user;
         const isExistEmail = await this.userModel.findOne({ email });
         if (isExistEmail) {
@@ -68,6 +96,18 @@ export class UsersService {
         }
         const userRole = await this.roleModel.findOne({ name: USER_ROLE });
         const hashPassword = this.getHashPassword(password);
+
+        const uploadsDir = path.join(__dirname, '../../uploads');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir);
+        }
+
+        const fileName = `${Date.now()}-${file.originalname}`;
+        const imagePath = path.join(uploadsDir, fileName);
+        fs.writeFileSync(imagePath, file.buffer as any);
+
+        const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
+        if (!faceDescriptor) throw new BadRequestException('Không phát hiện khuôn mặt');
         let newRegister = await this.userModel.create({
             name,
             email,
@@ -76,8 +116,13 @@ export class UsersService {
             gender,
             address,
             role: userRole?._id,
+            faceDescriptor: [faceDescriptor]
         });
         return newRegister;
+    }
+
+    async findForLogin() {
+        return await this.userModel.find();
     }
 
     async findAll(currentPage: number, limit: number, qs: string) {
@@ -119,6 +164,7 @@ export class UsersService {
                 _id: id,
             })
             .select("-password")
+            .select("-faceDescriptor")
             .populate({ path: "role", select: { name: 1, _id: 1 } });
     }
 

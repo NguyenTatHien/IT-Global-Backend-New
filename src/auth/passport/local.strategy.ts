@@ -11,20 +11,20 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
         private faceRecognitionService: FaceRecognitionService,
     ) {
         super(
-            {
-                usernameField: 'image',
-                passReqToCallback: true,
-            }
+            // {
+            //     usernameField: 'image',
+            //     passReqToCallback: true,
+            // }
         );
     }
 
-    // async validate(username: string, password: string): Promise<any> {
-    //     const user = await this.authService.validateUser(username, password);
-    //     if (!user) {
-    //         throw new UnauthorizedException("Username/password không hợp lệ");
-    //     }
-    //     return user;
-    // }
+    async validate(username: string, password: string): Promise<any> {
+        const user = await this.authService.validateUser(username, password);
+        if (!user) {
+            throw new UnauthorizedException("Username/password không hợp lệ");
+        }
+        return user;
+    }
 
     // async validate(req: any): Promise<any> {
     //     const file: Express.Multer.File = req.file; // Lấy file từ request

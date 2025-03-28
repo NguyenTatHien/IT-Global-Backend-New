@@ -30,13 +30,13 @@ export class AuthController {
         private rolesService: RolesService,
     ) { }
 
-    // @Public()
-    // @UseGuards(LocalAuthGuard)
-    // @Post("login1")
-    // @ResponseMessage("User Login")
-    // handleLogin(@Req() req, @Res({ passthrough: true }) response: Response) {
-    //     return this.authService.login1(req.user, response);
-    // }
+    @Public()
+    @UseGuards(LocalAuthGuard)
+    @Post("login1")
+    @ResponseMessage("User Login")
+    handleLogin(@Req() req, @Res({ passthrough: true }) response: Response) {
+        return this.authService.login1(req.user, response);
+    }
 
     @Public()
     // @UseGuards(FaceIdAuthGuard)

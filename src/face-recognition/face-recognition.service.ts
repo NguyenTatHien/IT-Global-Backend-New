@@ -51,10 +51,17 @@ export class FaceRecognitionService {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, img.width, img.height);
 
-        const detections = await faceapi.detectSingleFace(canvas).withFaceLandmarks().withFaceDescriptor();
+        const detections = await faceapi.detectAllFaces(canvas).withFaceLandmarks().withFaceDescriptors();
 
-        if (!detections) return null;
-        return Array.from(detections.descriptor);
+        if (!detections || detections.length === 0) {
+            throw new BadRequestException('No face detected in the image.');
+        }
+
+        if (detections.length > 1) {
+            throw new BadRequestException('Multiple faces detected. Please provide an image with only one face.');
+        }
+
+        return Array.from(detections[0].descriptor);
     }
 
     compareFaces(descriptor1: number[], descriptor2: number[]) {

@@ -64,7 +64,12 @@ export class FaceRecognitionService {
         return Array.from(detections[0].descriptor);
     }
 
-    compareFaces(descriptor1: number[], descriptor2: number[]) {
-        return Math.sqrt(descriptor1.reduce((sum, val, i) => sum + (val - descriptor2[i]) ** 2, 0));
+    compareFaces(descriptor1: number[], descriptor2: number[], threshold: number = 0.6): boolean {
+        if (descriptor1.length !== descriptor2.length) {
+            throw new Error('Descriptors must have the same length');
+        }
+
+        const distance = Math.sqrt(descriptor1.reduce((sum, val, i) => sum + (val - descriptor2[i]) ** 2, 0));
+        return distance < threshold; // Trả về true nếu khoảng cách nhỏ hơn ngưỡng
     }
 }

@@ -44,18 +44,41 @@ export class AuthService {
         return null;
     }
     async validateFace(file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('File ảnh là bắt buộc.');
+        }
+
+        // Xử lý khuôn mặt từ buffer
         const { buffer } = file;
         const faceDescriptor = await this.faceRecognitionService.processFaceFromBuffer(buffer);
 
+        if (!faceDescriptor) {
+            throw new UnauthorizedException('Không nhận diện được khuôn mặt.');
+        }
+
+        // Lấy danh sách người dùng từ cơ sở dữ liệu
         const users = await this.usersService.findForLogin() as any;
+        if (!users || users.length === 0) {
+            throw new UnauthorizedException('Không có người dùng nào trong hệ thống.');
+        }
+
+        // Tìm người dùng khớp với khuôn mặt
         for (const user of users) {
-            const distance = this.faceRecognitionService.compareFaces(user.faceDescriptor, faceDescriptor);
-            if (distance < 0.6) {
-                return user;
+            if (!user.faceDescriptor || !Array.isArray(user.faceDescriptor)) {
+                console.warn(`Người dùng ${user._id} không có dữ liệu faceDescriptor hợp lệ.`);
+                continue;
+            }
+
+            for (const storedDescriptor of user.faceDescriptor) {
+                const isMatch = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptor);
+                if (isMatch) {
+                    return user; // Trả về người dùng nếu khớp
+                }
             }
         }
 
-        return null;
+        // Không tìm thấy người dùng khớp
+        throw new UnauthorizedException('Không tìm thấy người dùng phù hợp.');
     }
 
     async login1(user: IUser, response: Response) {
@@ -97,27 +120,26 @@ export class AuthService {
         if (!file) {
             throw new BadRequestException('Image is required');
         }
-        // Xử lý khuôn mặt từ buffer thay vì lưu file
-        const faceDescriptorCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
-        if (!faceDescriptorCompare) throw new UnauthorizedException('Không nhận diện được khuôn mặt');
 
-        const users = await this.usersService.findForLogin() as any;
-        let matchedUser = null;
-        // So sánh khuôn mặt với dữ liệu trong DB
-        for (const user of users) {
-            for (const storedDescriptor of user.faceDescriptor) {
-                const distance = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptorCompare);
-                if (distance < 0.6) { // Ngưỡng nhận diện (có thể điều chỉnh)
-                    matchedUser = user;
-                    break;
-                }
-            }
-            if (matchedUser) break;
+        // Xử lý khuôn mặt từ buffer
+        const faceDescriptorCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+        if (!faceDescriptorCompare) {
+            throw new UnauthorizedException('Không nhận diện được khuôn mặt');
         }
 
+        // Lấy danh sách người dùng từ cơ sở dữ liệu
+        const users = await this.usersService.findForLogin() as any;
+        if (!users || users.length === 0) {
+            throw new UnauthorizedException('Không có người dùng nào trong hệ thống');
+        }
 
-        if (!matchedUser) throw new UnauthorizedException('Face not recognized');
+        // Tìm người dùng khớp với khuôn mặt
+        const matchedUser = this.findMatchingUser(users, faceDescriptorCompare);
+        if (!matchedUser) {
+            throw new UnauthorizedException('Face not recognized');
+        }
 
+        // Lấy thông tin vai trò của người dùng
         const userRole = matchedUser.role as unknown as {
             _id: string;
             name: string;
@@ -128,6 +150,7 @@ export class AuthService {
             throw new UnauthorizedException('Role not found');
         }
 
+        // Tạo payload cho token
         const payload = {
             sub: "token login",
             iss: "from server",
@@ -140,17 +163,19 @@ export class AuthService {
             },
         };
 
+        // Tạo refresh token
         const refresh_token = this.createRefreshToken(payload);
-        // Update user with refresh token
+
+        // Cập nhật refresh token cho người dùng
         await this.usersService.updateUserToken(refresh_token, matchedUser._id);
 
-        // Set refresh_token as cookies
+        // Set refresh token vào cookie
         response.cookie("refresh_token", refresh_token, {
             httpOnly: true,
-            maxAge:
-                ms(this.configService.get<string>("JWT_REFRESH_EXPIRE")) * 1000,
+            maxAge: ms(this.configService.get<string>("JWT_REFRESH_EXPIRE")) * 1000,
         });
 
+        // Trả về access token và thông tin người dùng
         return {
             access_token: this.jwtService.sign(payload),
             user: {
@@ -165,6 +190,17 @@ export class AuthService {
             },
         };
     }
+    private findMatchingUser(users: any[], faceDescriptorCompare: number[]): any {
+        for (const user of users) {
+            for (const storedDescriptor of user.faceDescriptor) {
+                const isMatch = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptorCompare);
+                if (isMatch) {
+                    return user; // Trả về người dùng nếu khớp
+                }
+            }
+        }
+        return null; // Không tìm thấy người dùng khớp
+    }
 
     async register(file: Express.Multer.File, registerUserDto: RegisterUserDto) {
         let newUser = await this.usersService.register(file, registerUserDto);
@@ -172,19 +208,6 @@ export class AuthService {
             _id: newUser?.id,
             createdAt: newUser?.createdAt,
         };
-    }
-
-    async findMatchedUser(faceDescriptorCompare: number[]) {
-        const users = await this.usersService.findForLogin();
-        for (const user of users) {
-            for (const storedDescriptor of user.faceDescriptor) {
-                const distance = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptorCompare);
-                if (distance < 0.6) { // Ngưỡng nhận diện (có thể điều chỉnh)
-                    return user;
-                }
-            }
-        }
-        return null;
     }
 
     createRefreshToken = (payload: any) => {

@@ -42,11 +42,9 @@ export class CreateUserDto {
     @IsMongoId({ message: "Role là định dạng mongo id" })
     role: string;
 
-    @IsNotEmptyObject()
-    @IsObject()
-    @ValidateNested()
-    @Type(() => Company)
-    company: Company;
+    image?: string;
+
+    faceDescriptor?: number[][];
 }
 
 export class RegisterUserDto {
@@ -70,5 +68,6 @@ export class RegisterUserDto {
     address: string;
 
     image?: string;
+
     faceDescriptor?: number[][];
 }

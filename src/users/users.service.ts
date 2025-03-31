@@ -34,8 +34,8 @@ export class UsersService {
         return hash;
     };
 
-    async create(createUserDto: CreateUserDto, @User() user: IUser) {
-        const { name, email, password, age, gender, address, role, company } =
+    async create(createUserDto: CreateUserDto, @User() user: IUser, file: Express.Multer.File) {
+        const { name, email, password, age, gender, address, role } =
             createUserDto;
         const isExistEmail = await this.userModel.findOne({ email });
         if (isExistEmail) {
@@ -44,6 +44,17 @@ export class UsersService {
             );
         }
         const hashPassword = this.getHashPassword(password);
+        const uploadsDir = path.join(__dirname, '../../public/images/user');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir);
+        }
+
+        const fileName = `${file.originalname}`;
+        const imagePath = path.join(uploadsDir, fileName);
+        fs.writeFileSync(imagePath, file.buffer as any);
+
+        const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
+        if (!faceDescriptor) throw new BadRequestException('Không phát hiện khuôn mặt');
         let newUser = await this.userModel.create({
             name,
             email,
@@ -52,10 +63,8 @@ export class UsersService {
             gender,
             address,
             role,
-            company: {
-                _id: company._id,
-                name: company.name,
-            },
+            image: fileName,
+            faceDescriptor: [faceDescriptor],
             createdBy: {
                 _id: user._id,
                 email: user.email,
@@ -97,12 +106,12 @@ export class UsersService {
         const userRole = await this.roleModel.findOne({ name: USER_ROLE });
         const hashPassword = this.getHashPassword(password);
 
-        const uploadsDir = path.join(__dirname, '../../uploads');
+        const uploadsDir = path.join(__dirname, '../../public/images/user');
         if (!fs.existsSync(uploadsDir)) {
             fs.mkdirSync(uploadsDir);
         }
 
-        const fileName = `${Date.now()}-${file.originalname}`;
+        const fileName = `face-${Date.now()}.jpg`;
         const imagePath = path.join(uploadsDir, fileName);
         fs.writeFileSync(imagePath, file.buffer as any);
 
@@ -116,6 +125,7 @@ export class UsersService {
             gender,
             address,
             role: userRole?._id,
+            image: fileName,
             faceDescriptor: [faceDescriptor]
         });
         return newRegister;
@@ -180,17 +190,59 @@ export class UsersService {
         return compareSync(password, hash);
     }
 
-    async update(updateUserDto: UpdateUserDto, @User() user: IUser) {
-        return await this.userModel.updateOne(
-            { _id: updateUserDto._id },
-            {
-                ...updateUserDto,
-                updatedBy: {
-                    _id: user._id,
-                    email: user.email,
-                },
+    async update(id: string, updateUserDto: UpdateUserDto, @User() user: IUser, file?: Express.Multer.File) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new BadRequestException('Invalid user ID');
+        }
+
+        // Kiểm tra xem người dùng có tồn tại hay không
+        const foundUser = await this.userModel.findById(id);
+        if (!foundUser) {
+            throw new BadRequestException('User not found');
+        }
+
+        let faceDescriptor = foundUser.faceDescriptor; // Giữ nguyên faceDescriptor cũ nếu không có file mới
+        let fileName = foundUser.image; // Giữ nguyên tên file cũ nếu không có file mới
+
+        // Nếu có file ảnh, xử lý và cập nhật descriptor khuôn mặt
+        if (file) {
+            const uploadsDir = path.join(__dirname, '../../public/images/user');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir);
+            }
+
+            // Tạo tên file mới và lưu file vào thư mục
+            fileName = `face-${Date.now()}.jpg`;
+            const imagePath = path.join(uploadsDir, fileName);
+            fs.writeFileSync(imagePath, file.buffer as any);
+
+            // Xử lý nhận diện khuôn mặt
+            const newFaceDescriptor = await this.faceRecognitionService.processFace(imagePath);
+            if (!newFaceDescriptor) {
+                throw new BadRequestException('No face detected in the uploaded image');
+            }
+
+            faceDescriptor = [newFaceDescriptor]; // Cập nhật faceDescriptor mới
+        }
+
+        // Cập nhật thông tin người dùng
+        const updatedData = {
+            ...updateUserDto,
+            ...(file && { image: fileName }),
+            faceDescriptor,
+            updatedBy: {
+                _id: user._id,
+                email: user.email,
             },
-        );
+        };
+
+        const updatedUser = await this.userModel.updateOne({ _id: id }, updatedData);
+
+        if (updatedUser.modifiedCount === 0) {
+            throw new BadRequestException('Không thể cập nhật thông tin người dùng');
+        }
+
+        return { updatedUser };
     }
 
     async remove(id: string, @User() user: IUser) {

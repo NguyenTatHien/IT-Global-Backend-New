@@ -24,12 +24,6 @@ export class User {
     @Prop()
     address: string;
 
-    @Prop({ type: Object })
-    company: {
-        _id: mongoose.Schema.Types.ObjectId;
-        name: string;
-    };
-
     @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Role.name })
     role: mongoose.Schema.Types.ObjectId;
 
@@ -39,8 +33,8 @@ export class User {
     @Prop({ type: [[Number]], required: true })
     faceDescriptor: number[][];
 
-    @Prop({ type: String })
-    faceId: string;
+    @Prop()
+    image: string;
 
     @Prop({ type: Object })
     createdBy: {

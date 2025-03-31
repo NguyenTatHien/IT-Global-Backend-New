@@ -8,12 +8,15 @@ import {
     Delete,
     UseGuards,
     Query,
+    UploadedFile,
+    UseInterceptors,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { Public, ResponseMessage, User } from "src/decorator/customize";
 import { IUser } from "./users.interface";
+import { FileInterceptor } from "@nestjs/platform-express";
 
 @Controller("users")
 export class UsersController {
@@ -21,8 +24,9 @@ export class UsersController {
 
     @Post()
     @ResponseMessage("Create a new User")
-    async create(@Body() createUserDto: CreateUserDto, @User() user: IUser) {
-        let newUser = await this.usersService.create(createUserDto, user);
+    @UseInterceptors(FileInterceptor('image'))
+    async create(@Body() createUserDto: CreateUserDto, @User() user: IUser, @UploadedFile() file: Express.Multer.File) {
+        let newUser = await this.usersService.create(createUserDto, user, file);
         return {
             _id: newUser?.id,
             createdAt: newUser?.createdAt,
@@ -46,10 +50,17 @@ export class UsersController {
         return await this.usersService.findOne(id);
     }
 
-    @Patch()
+    @Patch(":id")
     @ResponseMessage("Update a User")
-    async update(@Body() updateUserDto: UpdateUserDto, @User() user: IUser) {
-        let updatedUser = await this.usersService.update(updateUserDto, user);
+    @UseInterceptors(FileInterceptor('image'))
+    async update(
+        @Param("id") id: string,
+        @Body() updateUserDto: UpdateUserDto,
+        @User() user: IUser,
+        @UploadedFile() file: Express.Multer.File
+
+    ) {
+        let updatedUser = await this.usersService.update(id, updateUserDto, user, file);
         return updatedUser;
     }
 

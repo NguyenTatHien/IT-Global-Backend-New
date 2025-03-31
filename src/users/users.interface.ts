@@ -5,6 +5,7 @@ export interface IUser {
     age: number;
     gender: string;
     company: Object;
+    address: string;
     role: {
         _id: string;
         name: string;
@@ -15,5 +16,6 @@ export interface IUser {
         apiPath: string;
         module: string;
     }[];
+    image: string;
     faceDescriptor: number[][];
 }

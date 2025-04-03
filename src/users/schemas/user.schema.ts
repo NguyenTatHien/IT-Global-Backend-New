@@ -6,10 +6,10 @@ export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true })
 export class User {
-    @Prop()
+    @Prop({ required: true })
     name: string;
 
-    @Prop({ required: true })
+    @Prop({ required: true, unique: true })
     email: string;
 
     @Prop({ required: true })
@@ -28,13 +28,13 @@ export class User {
     role: mongoose.Schema.Types.ObjectId;
 
     @Prop()
-    refreshToken: string;
+    image: string;
 
-    @Prop({ type: [[Number]], required: true })
-    faceDescriptor: number[][];
+    @Prop({ type: [[Number]], default: [] })
+    faceDescriptors: number[][];
 
     @Prop()
-    image: string;
+    refreshToken: string;
 
     @Prop({ type: Object })
     createdBy: {

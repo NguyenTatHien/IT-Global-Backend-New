@@ -64,12 +64,13 @@ export class AuthService {
 
         // Tìm người dùng khớp với khuôn mặt
         for (const user of users) {
-            if (!user.faceDescriptor || !Array.isArray(user.faceDescriptor)) {
-                console.warn(`Người dùng ${user._id} không có dữ liệu faceDescriptor hợp lệ.`);
+            if (!user.faceDescriptors || !Array.isArray(user.faceDescriptors)) {
+                console.warn(`Người dùng ${user._id} không có dữ liệu faceDescriptors hợp lệ.`);
                 continue;
             }
 
-            for (const storedDescriptor of user.faceDescriptor) {
+            // Kiểm tra tất cả các khuôn mặt đã lưu của người dùng
+            for (const storedDescriptor of user.faceDescriptors) {
                 const isMatch = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptor);
                 if (isMatch) {
                     return user; // Trả về người dùng nếu khớp
@@ -117,82 +118,111 @@ export class AuthService {
     }
 
     async login(file: Express.Multer.File, response: Response) {
-        if (!file) {
-            throw new BadRequestException('Image is required');
-        }
+        try {
+            if (!file) {
+                throw new BadRequestException('Image is required');
+            }
 
-        // Xử lý khuôn mặt từ buffer
-        const faceDescriptorCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
-        if (!faceDescriptorCompare) {
-            throw new UnauthorizedException('Không nhận diện được khuôn mặt');
-        }
+            // Step 1: Process face from image
+            const faceDescriptorCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+            if (!faceDescriptorCompare) {
+                throw new UnauthorizedException('Không nhận diện được khuôn mặt');
+            }
 
-        // Lấy danh sách người dùng từ cơ sở dữ liệu
-        const users = await this.usersService.findForLogin() as any;
-        if (!users || users.length === 0) {
-            throw new UnauthorizedException('Không có người dùng nào trong hệ thống');
-        }
+            // Step 2: Get users list
+            const users = await this.usersService.findForLogin() as any;
+            if (!users || users.length === 0) {
+                throw new UnauthorizedException('Không có người dùng nào trong hệ thống');
+            }
 
-        // Tìm người dùng khớp với khuôn mặt
-        const matchedUser = this.findMatchingUser(users, faceDescriptorCompare);
-        if (!matchedUser) {
-            throw new UnauthorizedException('Face not recognized');
-        }
+            // Step 3: Find matching user
+            const matchedUser = this.findMatchingUser(users, faceDescriptorCompare);
+            if (!matchedUser) {
+                throw new UnauthorizedException('Không nhận diện được khuôn mặt');
+            }
 
-        // Lấy thông tin vai trò của người dùng
-        const userRole = matchedUser.role as unknown as {
-            _id: string;
-            name: string;
-        };
-        const roleDetails = await this.rolesService.findOne(userRole._id);
+            // Step 4: Get user role details
+            const userRole = matchedUser.role as unknown as { _id: string; name: string; };
+            const roleDetails = await this.rolesService.findOne(userRole._id);
 
-        if (!roleDetails) {
-            throw new UnauthorizedException('Role not found');
-        }
+            if (!roleDetails) {
+                throw new UnauthorizedException('Role not found');
+            }
 
-        // Tạo payload cho token
-        const payload = {
-            sub: "token login",
-            iss: "from server",
-            _id: matchedUser._id,
-            name: matchedUser.name,
-            email: matchedUser.email,
-            role: {
-                _id: roleDetails._id,
-                name: roleDetails.name,
-            },
-        };
-
-        // Tạo refresh token
-        const refresh_token = this.createRefreshToken(payload);
-
-        // Cập nhật refresh token cho người dùng
-        await this.usersService.updateUserToken(refresh_token, matchedUser._id);
-
-        // Set refresh token vào cookie
-        response.cookie("refresh_token", refresh_token, {
-            httpOnly: true,
-            maxAge: ms(this.configService.get<string>("JWT_REFRESH_EXPIRE")) * 1000,
-        });
-
-        // Trả về access token và thông tin người dùng
-        return {
-            access_token: this.jwtService.sign(payload),
-            user: {
-                _id: matchedUser._id,
+            // Step 5: Create token payload
+            const payload = {
+                sub: matchedUser._id, // Use user ID as subject
+                iss: "face-auth-server",
+                type: "access",
                 name: matchedUser.name,
                 email: matchedUser.email,
                 role: {
                     _id: roleDetails._id,
                     name: roleDetails.name,
                 },
-                permissions: roleDetails.permissions ?? [],
-            },
-        };
+                permissions: matchedUser.permissions,
+                iat: Math.floor(Date.now() / 1000)
+            };
+
+            // Step 6: Create refresh token
+            const refresh_token = this.createRefreshToken({
+                ...payload,
+                type: "refresh"
+            });
+
+            // Step 7: Update user's refresh token
+            await this.usersService.updateUserToken(refresh_token, matchedUser._id);
+
+            // Step 8: Set refresh token cookie
+            const refreshExpire = this.configService.get<string>('JWT_REFRESH_EXPIRE');
+            response.cookie('refresh_token', refresh_token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: ms(refreshExpire)
+            });
+
+            // Step 9: Generate access token and return response
+            const access_token = this.jwtService.sign(payload, {
+                expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRE')
+            });
+
+            return {
+                statusCode: 200,
+                message: 'Login successful',
+                data: {
+                    access_token,
+                    user: {
+                        _id: matchedUser._id,
+                        name: matchedUser.name,
+                        email: matchedUser.email,
+                        role: {
+                            _id: roleDetails._id,
+                            name: roleDetails.name,
+                        },
+                        permissions: matchedUser.permissions
+                    }
+                }
+            };
+        } catch (error) {
+            // Log error for debugging
+            console.error('Login error:', error);
+
+            // Re-throw with appropriate status
+            if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new UnauthorizedException('Xác thực không thành công');
+        }
     }
     private findMatchingUser(users: any[], faceDescriptorCompare: number[]): any {
         for (const user of users) {
-            for (const storedDescriptor of user.faceDescriptor) {
+            if (!user.faceDescriptors || !Array.isArray(user.faceDescriptors)) {
+                continue;
+            }
+
+            // Kiểm tra tất cả các khuôn mặt đã lưu của người dùng
+            for (const storedDescriptor of user.faceDescriptors) {
                 const isMatch = this.faceRecognitionService.compareFaces(storedDescriptor, faceDescriptorCompare);
                 if (isMatch) {
                     return user; // Trả về người dùng nếu khớp

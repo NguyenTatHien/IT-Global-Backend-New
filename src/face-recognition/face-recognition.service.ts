@@ -8,68 +8,153 @@ faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData:
 
 @Injectable()
 export class FaceRecognitionService {
+    private readonly FACE_DETECTION_THRESHOLD = 0.5; // Ngưỡng phát hiện khuôn mặt
+    private readonly FACE_MATCHING_THRESHOLD = 0.6; // Ngưỡng so sánh khuôn mặt
+    private readonly MIN_FACE_SIZE = 100; // Kích thước tối thiểu của khuôn mặt (pixels)
+
     constructor() {
         this.loadModels();
     }
 
     async loadModels() {
-        const modelPath = join(__dirname, '..', 'models'); // Đường dẫn đến thư mục models
+        const modelPath = join(__dirname, '..', 'models');
         await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
         await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
         await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
+        await faceapi.nets.faceExpressionNet.loadFromDisk(modelPath);
     }
 
     async detectFace(imageBuffer: Buffer) {
         const img = await loadImage(imageBuffer);
-        const detections = await faceapi.detectAllFaces(img as any).withFaceLandmarks().withFaceDescriptors();
+        const detections = await faceapi.detectAllFaces(img as any)
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withFaceDescriptors();
         return detections;
     }
 
     async verifyFace(imageBuffer: Buffer, userDescriptor: Float32Array) {
         const detections = await this.detectFace(imageBuffer);
         if (detections.length === 0) {
-            throw new BadRequestException('No face detected in the image.');
+            throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh.');
+        }
+
+        // Kiểm tra kích thước khuôn mặt
+        const faceSize = Math.max(
+            detections[0].detection.box.width,
+            detections[0].detection.box.height,
+        );
+        if (faceSize < this.MIN_FACE_SIZE) {
+            throw new BadRequestException(
+                'Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.'
+            );
+        }
+
+        // Kiểm tra độ tin cậy của phát hiện khuôn mặt
+        if (detections[0].detection.score < this.FACE_DETECTION_THRESHOLD) {
+            throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
         }
 
         const faceMatcher = new faceapi.FaceMatcher(userDescriptor);
         const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
-        return bestMatch.label === 'person';
+        return bestMatch.distance < this.FACE_MATCHING_THRESHOLD;
     }
 
     async processFace(imagePath: string) {
-        const img = await loadImage(fs.readFileSync(imagePath)) as any;
-        const detections = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+        const img = (await loadImage(fs.readFileSync(imagePath))) as any;
+        const detections = await faceapi.detectSingleFace(img)
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withFaceDescriptor();
 
         if (!detections) return null;
+        // Kiểm tra kích thước khuôn mặt
+        const faceSize = Math.max(
+            detections.detection.box.width,
+            detections.detection.box.height
+        );
+        if (faceSize < this.MIN_FACE_SIZE) {
+            throw new BadRequestException(
+                'Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.'
+            );
+        }
+
+        // Kiểm tra độ tin cậy của phát hiện khuôn mặt
+        if (detections.detection.score < this.FACE_DETECTION_THRESHOLD) {
+            throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
+        }
+
         return Array.from(detections.descriptor);
     }
 
     async processFaceFromBuffer(buffer: Buffer) {
         const img = await loadImage(buffer);
-
         const canvas = createCanvas(img.width, img.height) as any;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, img.width, img.height);
 
-        const detections = await faceapi.detectAllFaces(canvas).withFaceLandmarks().withFaceDescriptors();
+        const detections = await faceapi
+            .detectAllFaces(canvas)
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withFaceDescriptors();
 
         if (!detections || detections.length === 0) {
-            throw new BadRequestException('No face detected in the image.');
+            throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh.');
         }
 
         if (detections.length > 1) {
-            throw new BadRequestException('Multiple faces detected. Please provide an image with only one face.');
+            throw new BadRequestException('Phát hiện nhiều khuôn mặt. Vui lòng chỉ chụp một khuôn mặt.');
+        }
+
+        // Kiểm tra kích thước khuôn mặt
+        const faceSize = Math.max(
+            detections[0].detection.box.width,
+            detections[0].detection.box.height,
+        );
+        if (faceSize < this.MIN_FACE_SIZE) {
+            throw new BadRequestException('Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.');
+        }
+
+        // Kiểm tra độ tin cậy của phát hiện khuôn mặt
+        if (detections[0].detection.score < this.FACE_DETECTION_THRESHOLD) {
+            throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
+        }
+
+        // Kiểm tra biểu cảm khuôn mặt (liveness detection)
+        const expressions = detections[0].expressions;
+        const strongExpressions = ['happy', 'surprised', 'angry'];
+
+        for (const expr of strongExpressions) {
+            if (expressions[expr] > 0.7) {  // Ngưỡng 0.7 cho phép biểu cảm tự nhiên
+                throw new BadRequestException(
+                    'Vui lòng giữ khuôn mặt tự nhiên, tránh cười quá lớn hoặc có biểu cảm mạnh.'
+                );
+            }
+        }
+
+        // Kiểm tra trung tính (neutral) để đảm bảo khuôn mặt đủ tự nhiên
+        if (expressions.neutral < 0.3) {  // Yêu cầu ít nhất 30% trung tính
+            throw new BadRequestException(
+                'Vui lòng giữ khuôn mặt tự nhiên hơn.'
+            );
         }
 
         return Array.from(detections[0].descriptor);
     }
 
-    compareFaces(descriptor1: number[], descriptor2: number[], threshold: number = 0.6): boolean {
+    compareFaces(descriptor1: number[], descriptor2: number[]): boolean {
         if (descriptor1.length !== descriptor2.length) {
             throw new Error('Descriptors must have the same length');
         }
 
         const distance = Math.sqrt(descriptor1.reduce((sum, val, i) => sum + (val - descriptor2[i]) ** 2, 0));
-        return distance < threshold; // Trả về true nếu khoảng cách nhỏ hơn ngưỡng
+        return distance < this.FACE_MATCHING_THRESHOLD;
+    }
+
+    async addNewFaceDescriptor(userId: string, faceDescriptor: number[]) {
+        // Lưu face descriptor mới vào database
+        // Implement this method in UsersService
+        return true;
     }
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateUserDto, RegisterUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { InjectModel } from "@nestjs/mongoose";
@@ -55,6 +55,7 @@ export class UsersService {
 
         const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
         if (!faceDescriptor) throw new BadRequestException('Không phát hiện khuôn mặt');
+
         let newUser = await this.userModel.create({
             name,
             email,
@@ -64,7 +65,7 @@ export class UsersService {
             address,
             role,
             image: fileName,
-            faceDescriptor: [faceDescriptor],
+            faceDescriptors: [faceDescriptor],
             createdBy: {
                 _id: user._id,
                 email: user.email,
@@ -117,6 +118,7 @@ export class UsersService {
 
         const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
         if (!faceDescriptor) throw new BadRequestException('Không phát hiện khuôn mặt');
+
         let newRegister = await this.userModel.create({
             name,
             email,
@@ -126,7 +128,7 @@ export class UsersService {
             address,
             role: userRole?._id,
             image: fileName,
-            faceDescriptor: [faceDescriptor]
+            faceDescriptors: [faceDescriptor],
         });
         return newRegister;
     }
@@ -174,7 +176,7 @@ export class UsersService {
                 _id: id,
             })
             .select("-password")
-            .select("-faceDescriptor")
+            .select("-faceDescriptors")
             .populate({ path: "role", select: { name: 1, _id: 1 } });
     }
 
@@ -195,54 +197,46 @@ export class UsersService {
             throw new BadRequestException('Invalid user ID');
         }
 
-        // Kiểm tra xem người dùng có tồn tại hay không
         const foundUser = await this.userModel.findById(id);
         if (!foundUser) {
             throw new BadRequestException('User not found');
         }
 
-        let faceDescriptor = foundUser.faceDescriptor; // Giữ nguyên faceDescriptor cũ nếu không có file mới
-        let fileName = foundUser.image; // Giữ nguyên tên file cũ nếu không có file mới
+        let faceDescriptors = foundUser.faceDescriptors || [];
+        let fileName = foundUser.image;
 
-        // Nếu có file ảnh, xử lý và cập nhật descriptor khuôn mặt
         if (file) {
             const uploadsDir = path.join(__dirname, '../../public/images/user');
             if (!fs.existsSync(uploadsDir)) {
                 fs.mkdirSync(uploadsDir);
             }
 
-            // Tạo tên file mới và lưu file vào thư mục
             fileName = `face-${Date.now()}.jpg`;
             const imagePath = path.join(uploadsDir, fileName);
             fs.writeFileSync(imagePath, file.buffer as any);
 
-            // Xử lý nhận diện khuôn mặt
             const newFaceDescriptor = await this.faceRecognitionService.processFace(imagePath);
             if (!newFaceDescriptor) {
-                throw new BadRequestException('No face detected in the uploaded image');
+                throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh tải lên');
             }
 
-            faceDescriptor = [newFaceDescriptor]; // Cập nhật faceDescriptor mới
+            if (faceDescriptors.length >= 5) {
+                faceDescriptors = faceDescriptors.slice(1);
+            }
+            faceDescriptors.push(newFaceDescriptor);
         }
 
-        // Cập nhật thông tin người dùng
         const updatedData = {
             ...updateUserDto,
             ...(file && { image: fileName }),
-            faceDescriptor,
+            faceDescriptors,
             updatedBy: {
                 _id: user._id,
                 email: user.email,
             },
         };
 
-        const updatedUser = await this.userModel.updateOne({ _id: id }, updatedData);
-
-        if (updatedUser.modifiedCount === 0) {
-            throw new BadRequestException('Không thể cập nhật thông tin người dùng');
-        }
-
-        return { updatedUser };
+        return await this.userModel.findByIdAndUpdate(id, updatedData, { new: true });
     }
 
     async remove(id: string, @User() user: IUser) {
@@ -276,4 +270,41 @@ export class UsersService {
             select: { name: 1 },
         });
     };
+
+    async addNewFace(userId: string, file: Express.Multer.File) {
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid user ID');
+        }
+
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new BadRequestException('User not found');
+        }
+
+        const uploadsDir = path.join(__dirname, '../../public/images/user');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir);
+        }
+
+        const fileName = `face-${Date.now()}.jpg`;
+        const imagePath = path.join(uploadsDir, fileName);
+        fs.writeFileSync(imagePath, file.buffer as any);
+
+        const newFaceDescriptor = await this.faceRecognitionService.processFace(imagePath);
+        if (!newFaceDescriptor) {
+            throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh tải lên');
+        }
+
+        let faceDescriptors = user.faceDescriptors || [];
+        if (faceDescriptors.length >= 5) {
+            faceDescriptors = faceDescriptors.slice(1);
+        }
+        faceDescriptors.push(newFaceDescriptor);
+
+        return await this.userModel.findByIdAndUpdate(
+            userId,
+            { faceDescriptors },
+            { new: true }
+        );
+    }
 }

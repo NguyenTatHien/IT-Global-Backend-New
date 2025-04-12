@@ -29,9 +29,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             _id: string;
             name: string;
         };
-        const temp = (await this.rolesService.findOne(userRole._id)).toObject();
-        if (!temp) {
-            throw new UnauthorizedException('Role not found')
+
+        // Get role with populated permissions
+        const roleWithPermissions = await this.rolesService.findOne(userRole._id);
+        if (!roleWithPermissions) {
+            throw new UnauthorizedException('Role not found');
         }
 
         return {
@@ -39,7 +41,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             name,
             email,
             role,
-            permissions: temp?.permissions ?? [],
+            permissions: roleWithPermissions.permissions ?? [],
         };
     }
 }

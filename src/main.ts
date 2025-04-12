@@ -6,6 +6,7 @@ import { ConfigService } from "@nestjs/config";
 import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { TransformInterceptor } from "./core/transform.interceptor";
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from "cookie-parser";
 
 require("dotenv").config();
@@ -17,6 +18,21 @@ async function bootstrap() {
     const reflector = app.get(Reflector);
     app.useGlobalGuards(new JwtAuthGuard(reflector));
     app.useGlobalInterceptors(new TransformInterceptor(reflector));
+
+    // Basic Swagger configuration
+    try {
+        const config = new DocumentBuilder()
+            .setTitle('Attendance API')
+            .setDescription('The attendance system API description')
+            .setVersion('1.0')
+            .addBearerAuth()
+            .build();
+        const document = SwaggerModule.createDocument(app, config);
+        SwaggerModule.setup('api/docs', app, document);
+        console.log('Swagger documentation available at /api/docs');
+    } catch (error) {
+        console.error('Error setting up Swagger:', error);
+    }
 
     app.useStaticAssets(join(__dirname, "..", "public"));
     app.setBaseViewsDir(join(__dirname, "..", "views"));

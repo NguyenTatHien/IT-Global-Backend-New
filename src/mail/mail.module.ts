@@ -5,12 +5,6 @@ import { MailerModule } from "@nestjs-modules/mailer";
 import { ConfigService } from "@nestjs/config";
 import { join } from "path";
 import { HandlebarsAdapter } from "@nestjs-modules/mailer/dist/adapters/handlebars.adapter";
-import { MongooseModule } from "@nestjs/mongoose";
-import {
-    Subscriber,
-    SubscriberSchema,
-} from "src/subscribers/schemas/subscriber.schema";
-import { Job, JobSchema } from "src/jobs/schemas/job.schema";
 
 @Module({
     imports: [
@@ -24,7 +18,6 @@ import { Job, JobSchema } from "src/jobs/schemas/job.schema";
                         pass: configService.get<string>("EMAIL_AUTH_PASS"),
                     },
                 },
-
                 template: {
                     dir: join(__dirname, "templates"),
                     adapter: new HandlebarsAdapter(),
@@ -39,10 +32,6 @@ import { Job, JobSchema } from "src/jobs/schemas/job.schema";
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([
-            { name: Subscriber.name, schema: SubscriberSchema },
-            { name: Job.name, schema: JobSchema },
-        ]),
     ],
     controllers: [MailController],
     providers: [MailService],

@@ -3,9 +3,6 @@ import {
     IsEmail,
     IsMongoId,
     IsNotEmpty,
-    IsNotEmptyObject,
-    IsObject,
-    ValidateNested,
 } from "class-validator";
 import mongoose from "mongoose";
 
@@ -44,7 +41,11 @@ export class CreateUserDto {
 
     image?: string;
 
-    faceDescriptor?: number[][];
+    faceDescriptors?: number[][];
+    registeredFaces?: string[];
+    faceCount?: number;
+    lastFaceUpdate?: Date;
+    isFaceVerified?: boolean;
 }
 
 export class RegisterUserDto {
@@ -69,5 +70,9 @@ export class RegisterUserDto {
 
     image?: string;
 
-    faceDescriptor?: number[][];
+    faceDescriptors?: number[][];
+    registeredFaces?: string[];
+    faceCount?: number;
+    lastFaceUpdate?: Date;
+    isFaceVerified?: boolean;
 }

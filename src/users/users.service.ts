@@ -66,6 +66,9 @@ export class UsersService {
             role,
             image: fileName,
             faceDescriptors: [faceDescriptor],
+            faceCount: 1,
+            lastFaceUpdate: new Date(),
+            isFaceVerified: true,
             createdBy: {
                 _id: user._id,
                 email: user.email,
@@ -129,6 +132,9 @@ export class UsersService {
             role: userRole?._id,
             image: fileName,
             faceDescriptors: [faceDescriptor],
+            faceCount: 1,
+            lastFaceUpdate: new Date(),
+            isFaceVerified: true
         });
         return newRegister;
     }
@@ -296,14 +302,22 @@ export class UsersService {
         }
 
         let faceDescriptors = user.faceDescriptors || [];
-        if (faceDescriptors.length >= 5) {
-            faceDescriptors = faceDescriptors.slice(1);
+        if (faceDescriptors.length >= 3) {
+            throw new BadRequestException('Bạn đã đăng ký tối đa số lượng khuôn mặt cho phép (3 khuôn mặt).');
         }
+
+        await this.faceRecognitionService.addNewFaceDescriptor(userId, newFaceDescriptor);
+
         faceDescriptors.push(newFaceDescriptor);
 
         return await this.userModel.findByIdAndUpdate(
             userId,
-            { faceDescriptors },
+            {
+                faceDescriptors,
+                faceCount: faceDescriptors.length,
+                lastFaceUpdate: new Date(),
+                isFaceVerified: true
+            },
             { new: true }
         );
     }

@@ -4,7 +4,6 @@ export interface IUser {
     email: string;
     age: number;
     gender: string;
-    company: Object;
     address: string;
     role: {
         _id: string;
@@ -17,5 +16,9 @@ export interface IUser {
         module: string;
     }[];
     image: string;
-    faceDescriptor: number[][];
+    faceDescriptors: number[][];
+    registeredFaces: string[];
+    faceCount: number;
+    lastFaceUpdate: Date;
+    isFaceVerified: boolean;
 }

@@ -33,6 +33,21 @@ export class User {
     @Prop({ type: [[Number]], default: [] })
     faceDescriptors: number[][];
 
+    @Prop({ type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] })
+    registeredFaces: mongoose.Schema.Types.ObjectId[];
+
+    @Prop({ type: Number, default: 0 })
+    faceCount: number;
+
+    @Prop({ type: Date })
+    lastFaceUpdate: Date;
+
+    @Prop({ type: Boolean, default: false })
+    isFaceVerified: boolean;
+
+    @Prop({ type: Object })
+    permissions: Record<string, any>;
+
     @Prop()
     refreshToken: string;
 

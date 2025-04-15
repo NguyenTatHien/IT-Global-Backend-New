@@ -44,9 +44,7 @@ export class AuthController {
     @ResponseMessage("User Login")
     @UseInterceptors(FileInterceptor('image'))
     async login(@UploadedFile() file: Express.Multer.File, @Res({ passthrough: true }) response: Response) {
-        console.log('Login request received');
         const result = await this.authService.login(file);
-        console.log('Login response:', result);
         return result;
     }
 

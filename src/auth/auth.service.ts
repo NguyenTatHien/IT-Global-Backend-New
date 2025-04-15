@@ -149,10 +149,8 @@ export class AuthService {
                     name: roleDetails.name
                 }
             };
-            console.log('Generated token payload:', payload);
 
             const token = this.jwtService.sign(payload);
-            console.log('Login successful for user:', matchedUser.email);
 
             // Return consistent response structure
             return {

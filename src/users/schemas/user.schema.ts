@@ -30,6 +30,9 @@ export class User {
     @Prop()
     image: string;
 
+    @Prop()
+    avatar: string;
+
     @Prop({ type: [[Number]], default: [] })
     faceDescriptors: number[][];
 

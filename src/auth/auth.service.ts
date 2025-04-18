@@ -106,13 +106,8 @@ export class AuthService {
 
     async login(file: Express.Multer.File) {
         try {
-            console.log('Starting face recognition login process...');
-
             // Process face recognition
             const faceDescriptorsCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
-            console.log('Face recognition completed:', {
-                isFaceDetected: !!faceDescriptorsCompare
-            });
 
             if (!faceDescriptorsCompare) {
                 throw new UnauthorizedException('Không phát hiện được khuôn mặt trong ảnh');
@@ -121,11 +116,6 @@ export class AuthService {
             // Find matching user
             const users = await this.usersService.findForLogin();
             const matchedUser = await this.findMatchingUser(users, faceDescriptorsCompare);
-            console.log('User matching result:', {
-                found: !!matchedUser,
-                userId: matchedUser?._id,
-                email: matchedUser?.email
-            });
 
             if (!matchedUser) {
                 throw new UnauthorizedException('Không tìm thấy khuôn mặt phù hợp');

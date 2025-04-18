@@ -20,7 +20,7 @@ export class Attendance {
   @Prop()
   checkOutTime: Date;
 
-  @Prop({ required: true, enum: ['on-time', 'late', 'absent'] })
+  @Prop({ required: true, enum: ['on-time', 'late', 'absent', 'early'] })
   status: string;
 
   @Prop({ default: 0 })
@@ -44,11 +44,12 @@ export class Attendance {
   @Prop()
   deletedAt: Date;
 
-  @Prop({ default: false })
+  @Prop()
   updatedBy: string;
 
-  @Prop()
-  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+  __v: number;
 }
 
 export const AttendanceSchema = SchemaFactory.createForClass(Attendance);

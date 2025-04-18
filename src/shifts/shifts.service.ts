@@ -39,33 +39,71 @@ export class ShiftsService {
   }
 
   async findAll(currentPage: number = 1, limit: number = 10, qs: string = '') {
-    const { filter, sort, population } = aqp(qs);
-    delete filter.current;
-    delete filter.pageSize;
+    try {
+      // Parse query string
+      let filter = {};
+      let sort = { updatedAt: -1 };
 
-    let offset = (+currentPage - 1) * +limit;
-    let defaultLimit = +limit ? +limit : 10;
+      if (qs) {
+        try {
+          const queryParams = JSON.parse(qs);
+          if (queryParams.name) {
+            filter = {
+              ...filter,
+              name: {
+                $regex: queryParams.name.$regex,
+                $options: queryParams.name.$options
+              }
+            };
+          }
+          if (queryParams.status) {
+            filter = {
+              ...filter,
+              status: queryParams.status
+            };
+          }
+          if (queryParams.sort) {
+            sort = queryParams.sort;
+          }
+        } catch (error) {
+          console.error('Error parsing query string:', error);
+        }
+      }
 
-    const totalItems = (await this.shiftModel.find(filter)).length;
-    const totalPages = Math.ceil(totalItems / defaultLimit);
+      // Add isDeleted filter for soft delete
+      filter = {
+        ...filter,
+        isDeleted: false
+      };
 
-    const result = await this.shiftModel
-      .find(filter)
-      .skip(offset)
-      .limit(defaultLimit)
-      .sort(sort as any)
-      .populate(population)
-      .exec();
+      let offset = (+currentPage - 1) * +limit;
+      let defaultLimit = +limit ? +limit : 10;
 
-    return {
-      meta: {
-        current: currentPage,
-        pageSize: limit,
-        pages: totalPages,
-        total: totalItems
-      },
-      result
-    };
+      // Get total count
+      const totalItems = await this.shiftModel.countDocuments(filter);
+      const totalPages = Math.ceil(totalItems / defaultLimit);
+
+      // Get paginated results
+      const result = await this.shiftModel
+        .find(filter)
+        .sort(sort as any)
+        .skip(offset)
+        .limit(defaultLimit)
+        .exec();
+
+      return {
+        meta: {
+          current: currentPage,
+          pageSize: limit,
+          pages: totalPages,
+          total: totalItems
+        },
+        result
+      };
+    } catch (error) {
+      console.error('Error in findAll:', error);
+      throw error;
+    }
   }
 
   async findOne(id: string) {

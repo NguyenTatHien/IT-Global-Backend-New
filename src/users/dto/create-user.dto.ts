@@ -3,6 +3,7 @@ import {
     IsEmail,
     IsMongoId,
     IsNotEmpty,
+    IsString,
 } from "class-validator";
 import mongoose from "mongoose";
 
@@ -38,6 +39,10 @@ export class CreateUserDto {
     @IsNotEmpty({ message: "Role không được để trống" })
     @IsMongoId({ message: "Role là định dạng mongo id" })
     role: string;
+
+    @IsNotEmpty({ message: "Employee type không được để trống" })
+    @IsString({ message: "Employee type phải là string" })
+    employeeType: string;
 
     image?: string;
 

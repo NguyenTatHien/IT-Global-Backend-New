@@ -83,6 +83,9 @@ export class User {
 
     @Prop()
     deletedAt: Date;
+
+    @Prop({ default: 'official', enum: ['official', 'contract', 'intern'] })
+    employeeType: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

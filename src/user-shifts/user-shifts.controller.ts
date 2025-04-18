@@ -12,8 +12,21 @@ export class UserShiftsController {
   constructor(private readonly userShiftsService: UserShiftsService) {}
 
   @Post()
-  create(@Body() createUserShiftDto: CreateUserShiftDto, @Req() req: any) {
-    return this.userShiftsService.create(createUserShiftDto, req.user);
+  async create(@Body() createUserShiftDto: CreateUserShiftDto, @Req() req: any) {
+    try {
+      const result = await this.userShiftsService.create(createUserShiftDto, req.user);
+      return {
+        statusCode: HttpStatus.OK,
+        message: 'Thêm phân ca thành công',
+        data: result
+      };
+    } catch (error) {
+      throw new HttpException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: error.message || 'Failed to create user shift',
+        data: null
+      }, HttpStatus.BAD_REQUEST);
+    }
   }
 
   @Post('default-shift')
@@ -24,6 +37,24 @@ export class UserShiftsController {
   @Get('today')
   async getTodayShift(@Req() req: any) {
     return this.userShiftsService.getTodayShift(req.user._id);
+  }
+
+  @Get('my-shifts')
+  async getMyShifts(@Req() req: any) {
+    try {
+      const result = await this.userShiftsService.getMyShifts(req.user._id);
+      return {
+        statusCode: HttpStatus.OK,
+        message: 'Lấy danh sách ca làm việc thành công',
+        data: result
+      };
+    } catch (error) {
+      throw new HttpException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: error.message || 'Failed to get user shifts',
+        data: null
+      }, HttpStatus.BAD_REQUEST);
+    }
   }
 
   @Get()

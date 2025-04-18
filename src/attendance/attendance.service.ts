@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Attendance, AttendanceDocument } from './schemas/attendance.schema';
 import { UserShiftsService } from '../user-shifts/user-shifts.service';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
+import { IShift, IPopulatedUserShift, ITransformedAttendance } from './types/attendance.types';
 
 @Injectable()
 export class AttendanceService {
@@ -27,19 +28,21 @@ export class AttendanceService {
 
   async checkIn(userId: string, location?: { latitude: number; longitude: number }) {
     try {
-      console.log('Starting check-in process for user:', userId);
-      console.log('Location:', location);
-
       if (!userId) {
         throw new Error('userId là bắt buộc');
       }
 
       // 1. Lấy ca làm việc hôm đó
       const userShift = await this.userShiftsService.getTodayShift(userId);
+
       if (!userShift) {
         throw new Error('Không có ca làm việc hôm nay');
       }
-      console.log('User shift:', userShift);
+
+      if (!userShift.shiftId) {
+        console.error('User shift found but shiftId is null:', userShift);
+        throw new Error('Không tìm thấy thông tin ca làm việc');
+      }
 
       // 2. Kiểm tra trạng thái check-in
       const now = new Date();
@@ -67,13 +70,6 @@ export class AttendanceService {
       const lateMinutes = now > workStartTime ?
         Math.floor((now.getTime() - workStartTime.getTime()) / (1000 * 60)) : 0;
 
-      console.log('Check-in details:', {
-        status,
-        currentTime: now.toISOString(),
-        workStartTime: workStartTime.toISOString(),
-        lateMinutes
-      });
-
       // 4. Tạo bản ghi check-in
       const attendance = await this.attendanceModel.create({
         userId,
@@ -84,7 +80,20 @@ export class AttendanceService {
         location
       });
 
-      return attendance;
+      // 5. Populate userShiftId và trả về kết quả
+      const populatedAttendance = await this.attendanceModel
+        .findById(attendance._id)
+        .populate({
+          path: 'userShiftId',
+          populate: {
+            path: 'shiftId',
+            select: 'name startTime endTime status'
+          }
+        })
+        .exec();
+
+      return populatedAttendance;
+
     } catch (error) {
       console.error('Error in checkIn:', error);
       throw error;
@@ -93,7 +102,6 @@ export class AttendanceService {
 
   async checkOut(userId: string) {
     try {
-      console.log('Starting check-out process for user:', userId);
       if (!userId) {
         throw new Error('userId là bắt buộc');
       }
@@ -134,15 +142,6 @@ export class AttendanceService {
       const earlyMinutes = now < workEndTime ?
         Math.floor((workEndTime.getTime() - now.getTime()) / (1000 * 60)) : 0;
 
-      console.log('Check-out details:', {
-        checkInTime: checkInTime.toISOString(),
-        checkOutTime: now.toISOString(),
-        workEndTime: workEndTime.toISOString(),
-        totalHours: totalHours.toFixed(2),
-        overtimeHours: overtimeHours.toFixed(2),
-        earlyMinutes
-      });
-
       // 4. Cập nhật check-out
       attendance.checkOutTime = now;
       attendance.totalHours = parseFloat(totalHours.toFixed(2));
@@ -169,9 +168,6 @@ export class AttendanceService {
     query: { startDate: string; endDate: string; sort?: string }
   ) {
     try {
-      console.log('Getting attendance for user:', userId);
-      console.log('Query params:', query);
-
       const { startDate, endDate, sort } = query;
 
       if (!startDate || !endDate) {
@@ -185,18 +181,12 @@ export class AttendanceService {
 
       // Add date range filter
       try {
-        // Parse dates and set to start/end of day in UTC
+        // Parse dates and set to start/end of day in local timezone
         const startDateTime = new Date(startDate);
-        startDateTime.setUTCHours(0, 0, 0, 0);
+        startDateTime.setHours(0, 0, 0, 0);
 
         const endDateTime = new Date(endDate);
-        endDateTime.setUTCHours(23, 59, 59, 999);
-
-        console.log('Date filter:', {
-          startDateTime: startDateTime.toISOString(),
-          endDateTime: endDateTime.toISOString()
-        });
-
+        endDateTime.setHours(23, 59, 59, 999);
         mongoQuery.checkInTime = {
           $gte: startDateTime,
           $lte: endDateTime
@@ -205,9 +195,6 @@ export class AttendanceService {
         console.error('Error parsing dates:', error);
         throw new Error('Invalid date format');
       }
-
-      console.log('Final MongoDB query:', JSON.stringify(mongoQuery, null, 2));
-
       // Build sort object
       let sortObj: any = { checkInTime: -1 }; // Default sort
       if (sort) {
@@ -215,30 +202,75 @@ export class AttendanceService {
         const sortOrder = sort.startsWith('-') ? -1 : 1;
         sortObj = { [sortField]: sortOrder };
       }
-      console.log('Sort object:', sortObj);
-
       const skip = (current - 1) * pageSize;
       const [data, total] = await Promise.all([
         this.attendanceModel
           .find(mongoQuery)
-          .populate('userShiftId', 'name startTime endTime')
+          .populate({
+            path: 'userShiftId',
+            populate: {
+              path: 'shiftId',
+              select: 'name startTime endTime'
+            }
+          })
           .sort(sortObj)
           .skip(skip)
           .limit(pageSize)
+          .lean()
           .exec(),
         this.attendanceModel.countDocuments(mongoQuery)
       ]);
 
-      console.log('Found records:', data.length);
+      // Transform data to include formatted dates
+      const transformedData = data.map(item => {
+        const attendance: ITransformedAttendance = {
+          _id: item._id.toString(),
+          userId: item.userId,
+          checkInTime: new Date(item.checkInTime).toISOString(),
+          checkOutTime: item.checkOutTime ? new Date(item.checkOutTime).toISOString() : null,
+          status: item.status,
+          totalHours: Number(item.totalHours || 0).toFixed(2),
+          overtimeHours: Number(item.overtimeHours || 0),
+          lateMinutes: Number(item.lateMinutes || 0),
+          earlyMinutes: Number(item.earlyMinutes || 0),
+          isDeleted: item.isDeleted || false,
+          deletedAt: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
+          updatedBy: item.updatedBy || '',
+          createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString(),
+          updatedAt: item.updatedAt ? new Date(item.updatedAt).toISOString() : new Date().toISOString(),
+          __v: item.__v || 0,
+          userShiftId: null
+        };
 
+        // Handle userShiftId population
+        if (item.userShiftId && typeof item.userShiftId === 'object') {
+          const userShift = item.userShiftId as any;
+          if (userShift.shiftId) {
+            attendance.userShiftId = {
+              _id: userShift._id.toString(),
+              name: userShift.shiftId.name,
+              startTime: userShift.shiftId.startTime,
+              endTime: userShift.shiftId.endTime,
+              shiftId: {
+                _id: userShift.shiftId._id.toString(),
+                name: userShift.shiftId.name,
+                startTime: userShift.shiftId.startTime,
+                endTime: userShift.shiftId.endTime
+              }
+            };
+          }
+        }
+
+        return attendance;
+      });
       return {
         meta: {
-          current,
-          pageSize,
-          pages: Math.ceil(total / pageSize),
-          total
+          current: Number(current),
+          pageSize: Number(pageSize),
+          total: Number(total),
+          pages: Math.ceil(total / pageSize)
         },
-        result: data
+        result: transformedData
       };
     } catch (error) {
       console.error('Error in getMyAttendance:', error);
@@ -248,8 +280,6 @@ export class AttendanceService {
 
   async getTodayAttendance(userId: string) {
     try {
-      console.log('Getting today attendance for user:', userId);
-
       const today = new Date();
       const startOfDay = new Date(today);
       startOfDay.setHours(0, 0, 0, 0);

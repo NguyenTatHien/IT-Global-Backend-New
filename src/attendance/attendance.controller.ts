@@ -15,10 +15,6 @@ export class AttendanceController {
   @ResponseMessage('Điểm danh thành công')
   async checkIn(@Req() req) {
     try {
-      console.log('Check-in request:', {
-        userId: req.user?._id
-      });
-
       if (!req.user?._id) {
         throw new Error('Không tìm thấy thông tin người dùng');
       }
@@ -53,10 +49,6 @@ export class AttendanceController {
   @ResponseMessage('Kết thúc điểm danh thành công')
   async checkOut(@Req() req) {
     try {
-      console.log('Check-out request:', {
-        userId: req.user?._id
-      });
-
       if (!req.user?._id) {
         throw new Error('Không tìm thấy thông tin người dùng');
       }
@@ -98,20 +90,11 @@ export class AttendanceController {
     @Query('sort') sort?: string
   ) {
     try {
-      console.log('Get my attendance request:', {
-        userId: req.user?._id,
-        current,
-        pageSize,
-        startDate,
-        endDate,
-        sort
-      });
-
       if (!req.user?._id) {
         throw new Error('Không tìm thấy thông tin người dùng');
       }
 
-      const result = await this.attendanceService.getMyAttendance(
+      const serviceResult = await this.attendanceService.getMyAttendance(
         req.user._id,
         current,
         pageSize,
@@ -121,7 +104,14 @@ export class AttendanceController {
       return {
         statusCode: HttpStatus.OK,
         message: 'Lấy lịch sử điểm danh thành công',
-        data: result
+        data: {
+          result: serviceResult.result,
+          meta: {
+            current: serviceResult.meta.current,
+            pageSize: serviceResult.meta.pageSize,
+            total: serviceResult.meta.total
+          }
+        }
       };
     } catch (error) {
       console.error('Get my attendance error:', error);
@@ -137,10 +127,6 @@ export class AttendanceController {
   @ResponseMessage('Lấy thông tin điểm danh hôm nay thành công')
   async getTodayAttendance(@Req() req) {
     try {
-      console.log('Get today attendance request:', {
-        userId: req.user?._id
-      });
-
       if (!req.user?._id) {
         throw new Error('Không tìm thấy thông tin người dùng');
       }

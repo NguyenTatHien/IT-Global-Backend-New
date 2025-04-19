@@ -121,7 +121,6 @@ export class UserShiftsService {
         }
       );
 
-      console.log(`Updated ${result.modifiedCount} expired shifts to inactive status`);
       return result;
     } catch (error) {
       console.error('Error updating expired shifts:', error);

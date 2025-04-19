@@ -21,3 +21,11 @@ export const User = createParamDecorator(
 export const IS_PUBLIC_PERMISSION = "isPublicPermission";
 export const SkipCheckPermission = () =>
     SetMetadata(IS_PUBLIC_PERMISSION, true);
+
+// Decorator for required permissions
+export const PERMISSIONS_KEY = 'permissions';
+export const Permissions = (...permissions: string[]) => SetMetadata(PERMISSIONS_KEY, permissions);
+
+// Decorator for roles
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);

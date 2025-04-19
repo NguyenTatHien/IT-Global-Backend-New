@@ -9,6 +9,7 @@ import {
 } from "src/permissions/schemas/permission.schema";
 import { Role, RoleSchema } from "src/roles/schemas/role.schema";
 import { UsersService } from "src/users/users.service";
+import { FaceRecognitionService } from "src/face-recognition/face-recognition.service";
 
 @Module({
     imports: [
@@ -19,6 +20,6 @@ import { UsersService } from "src/users/users.service";
         ]),
     ],
     controllers: [DatabasesController],
-    providers: [DatabasesService, UsersService],
+    providers: [DatabasesService, UsersService, FaceRecognitionService],
 })
-export class DatabasesModule {}
+export class DatabasesModule { }

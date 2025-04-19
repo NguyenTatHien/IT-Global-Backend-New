@@ -6,16 +6,26 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { UsersModule } from "./users/users.module";
 import { AuthModule } from "./auth/auth.module";
 import { softDeletePlugin } from "soft-delete-plugin-mongoose";
-import { CompaniesModule } from "./companies/companies.module";
 import { JobsModule } from "./jobs/jobs.module";
 import { FilesModule } from "./files/files.module";
-import { ResumesModule } from "./resumes/resumes.module";
 import { PermissionsModule } from "./permissions/permissions.module";
 import { RolesModule } from "./roles/roles.module";
 import { DatabasesModule } from "./databases/databases.module";
-import { SubscribersModule } from "./subscribers/subscribers.module";
 import { MailModule } from "./mail/mail.module";
 import { ScheduleModule } from "@nestjs/schedule";
+import { FaceRecognitionModule } from './face-recognition/face-recognition.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { CacheModule } from '@nestjs/cache-manager';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { CacheInterceptor } from '@nestjs/cache-manager';
+import { ShiftsModule } from './shifts/shifts.module';
+import { UserShiftsModule } from './user-shifts/user-shifts.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
+import { PayrollModule } from './payroll/payroll.module';
+import { ReportsModule } from './reports/reports.module';
+import { SystemConfigsModule } from './system-configs/system-configs.module';
+import { SystemLogsModule } from './system-logs/system-logs.module';
 
 @Module({
     imports: [
@@ -34,19 +44,42 @@ import { ScheduleModule } from "@nestjs/schedule";
         ConfigModule.forRoot({
             isGlobal: true,
         }),
+        ThrottlerModule.forRoot([
+            {
+            ttl: 60,
+                limit: 5,
+            },
+        ]),
+        CacheModule.register({
+            isGlobal: true,
+            ttl: 60 * 60 * 24, // 24 hours
+            max: 100, // maximum number of items in cache
+        }),
         UsersModule,
         AuthModule,
-        CompaniesModule,
         JobsModule,
         FilesModule,
-        ResumesModule,
         PermissionsModule,
         RolesModule,
         DatabasesModule,
-        SubscribersModule,
         MailModule,
+        FaceRecognitionModule,
+        ShiftsModule,
+        UserShiftsModule,
+        AttendanceModule,
+        LeaveRequestsModule,
+        PayrollModule,
+        ReportsModule,
+        SystemConfigsModule,
+        SystemLogsModule
     ],
     controllers: [AppController],
-    providers: [AppService],
+    providers: [
+        AppService,
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: CacheInterceptor,
+        },
+    ],
 })
 export class AppModule { }

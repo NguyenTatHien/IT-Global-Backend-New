@@ -3,9 +3,7 @@ import {
     IsEmail,
     IsMongoId,
     IsNotEmpty,
-    IsNotEmptyObject,
-    IsObject,
-    ValidateNested,
+    IsString,
 } from "class-validator";
 import mongoose from "mongoose";
 
@@ -42,11 +40,17 @@ export class CreateUserDto {
     @IsMongoId({ message: "Role là định dạng mongo id" })
     role: string;
 
-    @IsNotEmptyObject()
-    @IsObject()
-    @ValidateNested()
-    @Type(() => Company)
-    company: Company;
+    @IsNotEmpty({ message: "Employee type không được để trống" })
+    @IsString({ message: "Employee type phải là string" })
+    employeeType: string;
+
+    image?: string;
+
+    faceDescriptors?: number[][];
+    registeredFaces?: string[];
+    faceCount?: number;
+    lastFaceUpdate?: Date;
+    isFaceVerified?: boolean;
 }
 
 export class RegisterUserDto {
@@ -68,4 +72,12 @@ export class RegisterUserDto {
 
     @IsNotEmpty({ message: "Address không được để trống" })
     address: string;
+
+    image?: string;
+
+    faceDescriptors?: number[][];
+    registeredFaces?: string[];
+    faceCount?: number;
+    lastFaceUpdate?: Date;
+    isFaceVerified?: boolean;
 }

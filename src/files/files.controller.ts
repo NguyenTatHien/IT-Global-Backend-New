@@ -19,12 +19,12 @@ import { Public, ResponseMessage } from "src/decorator/customize";
 
 @Controller("files")
 export class FilesController {
-    constructor(private readonly filesService: FilesService) {}
+    constructor(private readonly filesService: FilesService) { }
 
     @Public()
     @Post("upload")
     @ResponseMessage("Upload Single File")
-    @UseInterceptors(FileInterceptor("fileUpload"))
+    @UseInterceptors(FileInterceptor("image"))
     uploadFile(
         @UploadedFile(
             new ParseFilePipeBuilder()

@@ -1,16 +1,15 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { UsersService } from "../users/users.service";
 import { JwtService } from "@nestjs/jwt";
 import { IUser } from "src/users/users.interface";
-import { genSaltSync, hashSync } from "bcryptjs";
 import { RegisterUserDto } from "src/users/dto/create-user.dto";
-import { User, UserDocument } from "src/users/schemas/user.schema";
-import { InjectModel } from "@nestjs/mongoose";
-import { SoftDeleteModel } from "soft-delete-plugin-mongoose";
 import { ConfigService } from "@nestjs/config";
 import ms from "ms";
 import { Response } from "express";
 import { RolesService } from "src/roles/roles.service";
+import { FaceRecognitionService } from "src/face-recognition/face-recognition.service";
+import * as faceapi from "face-api.js";
+
 
 @Injectable()
 export class AuthService {
@@ -19,7 +18,8 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
         private rolesService: RolesService,
-    ) {}
+        private faceRecognitionService: FaceRecognitionService,
+    ) { }
 
     async validateUser(username: string, pass: string): Promise<any> {
         const user = await this.usersService.findOneByUsername(username);
@@ -44,8 +44,32 @@ export class AuthService {
         }
         return null;
     }
+    async validateFace(file: Express.Multer.File) {
+        const faceDescriptors = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+        const users = await this.usersService.findForLogin();
+        let bestMatch = null;
+        let highestSimilarity = 0;
 
-    async login(user: IUser, response: Response) {
+        for (const user of users) {
+            if (!user.faceDescriptors || !Array.isArray(user.faceDescriptors)) continue;
+
+            for (const storedDescriptor of user.faceDescriptors) {
+                const similarity = this.faceRecognitionService.calculateFaceSimilarity(faceDescriptors, storedDescriptor);
+                if (similarity > highestSimilarity) {
+                    highestSimilarity = similarity;
+                    bestMatch = user;
+                }
+            }
+        }
+
+        if (!bestMatch || highestSimilarity < 0.4) {
+            throw new UnauthorizedException('Không tìm thấy khuôn mặt phù hợp.');
+        }
+
+        return bestMatch;
+    }
+
+    async login1(user: IUser, response: Response) {
         const { _id, name, email, role, permissions } = user;
         const payload = {
             sub: "token login",
@@ -80,8 +104,98 @@ export class AuthService {
         };
     }
 
-    async register(registerUserDto: RegisterUserDto) {
-        let newUser = await this.usersService.register(registerUserDto);
+    async login(file: Express.Multer.File) {
+        try {
+            // Process face recognition
+            const faceDescriptorsCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+
+            if (!faceDescriptorsCompare) {
+                throw new UnauthorizedException('Không phát hiện được khuôn mặt trong ảnh');
+            }
+
+            // Find matching user
+            const users = await this.usersService.findForLogin();
+            const matchedUser = await this.findMatchingUser(users, faceDescriptorsCompare);
+
+            if (!matchedUser) {
+                throw new UnauthorizedException('Không tìm thấy khuôn mặt phù hợp');
+            }
+
+            // Get role details
+            const userRole = matchedUser.role as unknown as { _id: string; name: string; };
+            const roleDetails = await this.rolesService.findOne(userRole._id);
+
+            if (!roleDetails) {
+                throw new UnauthorizedException('Role not found');
+            }
+
+            // Generate token
+            const payload = {
+                _id: matchedUser._id,
+                name: matchedUser.name,
+                email: matchedUser.email,
+                role: {
+                    _id: roleDetails._id,
+                    name: roleDetails.name
+                }
+            };
+
+            const token = this.jwtService.sign(payload);
+
+            // Return consistent response structure
+            return {
+                data: {
+                    access_token: token,
+                    user: {
+                        name: matchedUser.name,
+                        email: matchedUser.email,
+                        role: {
+                            _id: roleDetails._id,
+                            name: roleDetails.name
+                        },
+                        permissions: roleDetails.permissions
+                    }
+                }
+            };
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
+        }
+    }
+
+    private async findMatchingUser(users: any[], faceDescriptor: number[]): Promise<IUser | null> {
+        let bestMatch: IUser | null = null;
+        let highestSimilarity = 0.3; // Giảm ngưỡng từ 0.4 xuống 0.3
+
+        console.log(`Comparing face with ${users.length} users...`);
+
+        for (const user of users) {
+            if (!user.faceDescriptors || user.faceDescriptors.length === 0) {
+                console.log(`User ${user._id} has no face descriptors`);
+                continue;
+            }
+
+            for (const storedDescriptor of user.faceDescriptors) {
+                try {
+                    const similarity = this.faceRecognitionService.calculateFaceSimilarity(faceDescriptor, storedDescriptor);
+                    console.log(`Similarity with user ${user._id}: ${similarity}`);
+
+                    if (similarity > highestSimilarity) {
+                        highestSimilarity = similarity;
+                        bestMatch = user as IUser;
+                    }
+                } catch (error) {
+                    console.error(`Error comparing face with user ${user._id}:`, error);
+                }
+            }
+        }
+
+        console.log(`Best match found: ${bestMatch?._id} with similarity ${highestSimilarity}`);
+        return bestMatch;
+    }
+
+    async register(file: Express.Multer.File, registerUserDto: RegisterUserDto) {
+        let newUser = await this.usersService.register(file, registerUserDto);
         return {
             _id: newUser?.id,
             createdAt: newUser?.createdAt,
@@ -174,3 +288,6 @@ export class AuthService {
         return "ok";
     };
 }
+
+
+

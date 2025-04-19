@@ -10,9 +10,14 @@ import ms from "ms";
 import { AuthController } from "./auth.controller";
 import { RolesModule } from "src/roles/roles.module";
 import { RolesService } from "src/roles/roles.service";
+import { FaceRecognitionModule } from "src/face-recognition/face-recognition.module";
+import { MulterModule } from "@nestjs/platform-express";
 
 @Module({
     imports: [
+        // MulterModule.register({
+        //     dest: "../../uploads",
+        // }),
         UsersModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
@@ -28,9 +33,10 @@ import { RolesService } from "src/roles/roles.service";
         }),
         PassportModule,
         RolesModule,
+        FaceRecognitionModule
     ],
     providers: [AuthService, LocalStrategy, JwtStrategy],
     exports: [AuthService],
     controllers: [AuthController],
 })
-export class AuthModule {}
+export class AuthModule { }

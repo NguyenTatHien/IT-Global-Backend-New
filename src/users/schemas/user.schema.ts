@@ -6,10 +6,10 @@ export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true })
 export class User {
-    @Prop()
+    @Prop({ required: true })
     name: string;
 
-    @Prop({ required: true })
+    @Prop({ required: true, unique: true })
     email: string;
 
     @Prop({ required: true })
@@ -24,14 +24,32 @@ export class User {
     @Prop()
     address: string;
 
-    @Prop({ type: Object })
-    company: {
-        _id: mongoose.Schema.Types.ObjectId;
-        name: string;
-    };
-
     @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Role.name })
     role: mongoose.Schema.Types.ObjectId;
+
+    @Prop()
+    image: string;
+
+    @Prop()
+    avatar: string;
+
+    @Prop({ type: [[Number]], default: [] })
+    faceDescriptors: number[][];
+
+    @Prop({ type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] })
+    registeredFaces: mongoose.Schema.Types.ObjectId[];
+
+    @Prop({ type: Number, default: 0 })
+    faceCount: number;
+
+    @Prop({ type: Date })
+    lastFaceUpdate: Date;
+
+    @Prop({ type: Boolean, default: false })
+    isFaceVerified: boolean;
+
+    @Prop({ type: Object })
+    permissions: Record<string, any>;
 
     @Prop()
     refreshToken: string;
@@ -65,6 +83,9 @@ export class User {
 
     @Prop()
     deletedAt: Date;
+
+    @Prop({ default: 'official', enum: ['official', 'contract', 'intern'] })
+    employeeType: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

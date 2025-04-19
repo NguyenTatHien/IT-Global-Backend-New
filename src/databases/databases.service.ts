@@ -68,41 +68,41 @@ export class DatabasesService implements OnModuleInit {
                 const userRole = await this.roleModel.findOne({
                     name: USER_ROLE,
                 });
-                await this.userModel.insertMany([
-                    {
-                        name: "I'm admin",
-                        email: "admin@gmail.com",
-                        password: this.userService.getHashPassword(
-                            this.configService.get<string>("INIT_PASSWORD"),
-                        ),
-                        age: 69,
-                        gender: "MALE",
-                        address: "VietNam",
-                        role: adminRole?._id,
-                    },
-                    {
-                        name: "I'm Hỏi Dân IT",
-                        email: "hoidanit@gmail.com",
-                        password: this.userService.getHashPassword(
-                            this.configService.get<string>("INIT_PASSWORD"),
-                        ),
-                        age: 96,
-                        gender: "MALE",
-                        address: "VietNam",
-                        role: adminRole?._id,
-                    },
-                    {
-                        name: "I'm normal user",
-                        email: "user@gmail.com",
-                        password: this.userService.getHashPassword(
-                            this.configService.get<string>("INIT_PASSWORD"),
-                        ),
-                        age: 69,
-                        gender: "MALE",
-                        address: "VietNam",
-                        role: userRole?._id,
-                    },
-                ]);
+                // await this.userModel.insertMany([
+                //     {
+                //         name: "I'm admin",
+                //         email: "admin@gmail.com",
+                //         password: this.userService.getHashPassword(
+                //             this.configService.get<string>("INIT_PASSWORD"),
+                //         ),
+                //         age: 69,
+                //         gender: "MALE",
+                //         address: "VietNam",
+                //         role: adminRole?._id,
+                //     },
+                //     {
+                //         name: "I'm Hỏi Dân IT",
+                //         email: "hoidanit@gmail.com",
+                //         password: this.userService.getHashPassword(
+                //             this.configService.get<string>("INIT_PASSWORD"),
+                //         ),
+                //         age: 96,
+                //         gender: "MALE",
+                //         address: "VietNam",
+                //         role: adminRole?._id,
+                //     },
+                //     {
+                //         name: "I'm normal user",
+                //         email: "user@gmail.com",
+                //         password: this.userService.getHashPassword(
+                //             this.configService.get<string>("INIT_PASSWORD"),
+                //         ),
+                //         age: 69,
+                //         gender: "MALE",
+                //         address: "VietNam",
+                //         role: userRole?._id,
+                //     },
+                // ]);
             }
 
             if (countUser > 0 && countRole > 0 && countPermission > 0) {

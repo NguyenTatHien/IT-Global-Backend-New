@@ -8,7 +8,7 @@ faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData:
 
 @Injectable()
 export class FaceRecognitionService {
-    private readonly FACE_DETECTION_THRESHOLD = 0.5; // Ngưỡng phát hiện khuôn mặt
+    private readonly FACE_DETECTION_THRESHOLD = 0.7; // Ngưỡng phát hiện khuôn mặt
     private readonly FACE_MATCHING_THRESHOLD = 0.4; // Ngưỡng so sánh khuôn mặt
     private readonly MIN_FACE_SIZE = 100; // Kích thước tối thiểu của khuôn mặt (pixels)
     private readonly MAX_FACE_DESCRIPTORS = 3; // Số lượng khuôn mặt tối đa cho mỗi người dùng

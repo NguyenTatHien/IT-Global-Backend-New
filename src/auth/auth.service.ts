@@ -165,7 +165,7 @@ export class AuthService {
 
     private async findMatchingUser(users: any[], faceDescriptor: number[]): Promise<IUser | null> {
         let bestMatch: IUser | null = null;
-        let highestSimilarity = 0.3; // Giảm ngưỡng từ 0.4 xuống 0.3
+        let highestSimilarity = 0.7; // Giảm ngưỡng từ 0.4 xuống 0.3
 
         console.log(`Comparing face with ${users.length} users...`);
 
@@ -180,7 +180,7 @@ export class AuthService {
                     const similarity = this.faceRecognitionService.calculateFaceSimilarity(faceDescriptor, storedDescriptor);
                     console.log(`Similarity with user ${user._id}: ${similarity}`);
 
-                    if (similarity > highestSimilarity) {
+                    if (similarity >= highestSimilarity) {
                         highestSimilarity = similarity;
                         bestMatch = user as IUser;
                     }

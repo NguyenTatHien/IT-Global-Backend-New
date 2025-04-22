@@ -128,7 +128,7 @@ export class FaceRecognitionService {
 
         // Kiểm tra độ tin cậy của phát hiện khuôn mặt
         console.log(`Detection score: ${detections[0].detection.score}`);
-        if (detections[0].detection.score < 0.7) { // Giảm từ 0.5 xuống 0.3
+        if (detections[0].detection.score < this.FACE_DETECTION_THRESHOLD) { // Giảm từ 0.5 xuống 0.3
             console.log('Detection score too low');
             throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
         }

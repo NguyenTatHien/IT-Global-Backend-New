@@ -69,4 +69,10 @@ export class UsersController {
     async remove(@Param("id") id: string, @User() user: IUser) {
         return await this.usersService.remove(id, user);
     }
+
+    @Get('profile/me')
+    @ResponseMessage("Get my profile")
+    async getProfile(@User() user: IUser) {
+        return await this.usersService.findOne(user._id);
+    }
 }

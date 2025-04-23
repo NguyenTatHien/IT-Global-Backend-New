@@ -4,8 +4,13 @@ import {
     IsMongoId,
     IsNotEmpty,
     IsString,
+    MinLength,
+    IsNumber,
+    IsOptional,
+    IsArray
 } from "class-validator";
 import mongoose from "mongoose";
+import { Transform } from 'class-transformer';
 
 // data transfer object // class = {}
 
@@ -24,16 +29,34 @@ export class CreateUserDto {
     @IsNotEmpty({ message: "Email không được để trống" })
     email: string;
 
+    @IsString()
     @IsNotEmpty({ message: "Password không được để trống" })
+    @MinLength(6, { message: "Password phải có ít nhất 6 ký tự" })
     password: string;
 
+    @IsNumber({}, { message: "Age phải là số" })
     @IsNotEmpty({ message: "Age không được để trống" })
+    @Transform(({ value }) => parseInt(value))
     age: number;
 
+    @IsString()
     @IsNotEmpty({ message: "Gender không được để trống" })
     gender: string;
 
+    @IsString()
     @IsNotEmpty({ message: "Address không được để trống" })
+    @Transform(({ value }) => {
+        try {
+            // Kiểm tra xem address có phải là JSON string hợp lệ không
+            const addressObj = JSON.parse(value);
+            if (!addressObj.city || !addressObj.district || !addressObj.ward || !addressObj.detail) {
+                throw new Error("Address không đúng định dạng");
+            }
+            return value;
+        } catch (error) {
+            throw new Error("Address không đúng định dạng");
+        }
+    })
     address: string;
 
     @IsNotEmpty({ message: "Role không được để trống" })
@@ -44,7 +67,16 @@ export class CreateUserDto {
     @IsString({ message: "Employee type phải là string" })
     employeeType: string;
 
+    @IsOptional()
+    @IsArray()
+    permissions?: string[];
+
+    @IsOptional()
     image?: string;
+
+    @IsOptional()
+    @IsArray()
+    faceDescriptor?: number[];
 
     faceDescriptors?: number[][];
     registeredFaces?: string[];

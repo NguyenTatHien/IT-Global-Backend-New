@@ -140,7 +140,8 @@ export class UsersService {
     }
 
     async findForLogin() {
-        return await this.userModel.find();
+        const users = await this.userModel.find();
+        return users;
     }
 
     async findAll(currentPage: number, limit: number, qs: string) {
@@ -287,6 +288,10 @@ export class UsersService {
             throw new BadRequestException('User not found');
         }
 
+        if (user.faceCount > 0) {
+            throw new BadRequestException('Bạn đã đăng ký khuôn mặt. Mỗi người dùng chỉ được đăng ký một khuôn mặt.');
+        }
+
         const uploadsDir = path.join(__dirname, '../../public/images/user');
         if (!fs.existsSync(uploadsDir)) {
             fs.mkdirSync(uploadsDir);
@@ -301,22 +306,16 @@ export class UsersService {
             throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh tải lên');
         }
 
-        let faceDescriptors = user.faceDescriptors || [];
-        if (faceDescriptors.length >= 3) {
-            throw new BadRequestException('Bạn đã đăng ký tối đa số lượng khuôn mặt cho phép (3 khuôn mặt).');
-        }
-
-        await this.faceRecognitionService.addNewFaceDescriptor(userId, newFaceDescriptor);
-
-        faceDescriptors.push(newFaceDescriptor);
+        const faceDescriptors = [newFaceDescriptor];
 
         return await this.userModel.findByIdAndUpdate(
             userId,
             {
                 faceDescriptors,
-                faceCount: faceDescriptors.length,
+                faceCount: 1,
                 lastFaceUpdate: new Date(),
-                isFaceVerified: true
+                isFaceVerified: true,
+                image: fileName
             },
             { new: true }
         );
@@ -324,29 +323,33 @@ export class UsersService {
 
     async processImage(userId: string, file: Express.Multer.File): Promise<string> {
         try {
-            // Create directory if it doesn't exist
+            const existingUser = await this.userModel.findById(userId);
+            if (!existingUser) {
+                throw new BadRequestException('User not found');
+            }
+
+            if (existingUser.faceCount > 0) {
+                throw new BadRequestException('Bạn đã đăng ký khuôn mặt. Mỗi người dùng chỉ được đăng ký một khuôn mặt.');
+            }
+
             const uploadDir = path.join(process.cwd(), 'public', 'images', 'users');
             if (!fs.existsSync(uploadDir)) {
                 fs.mkdirSync(uploadDir, { recursive: true });
             }
 
-            // Generate unique filename
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
             const filename = `${userId}-${uniqueSuffix}${path.extname(file.originalname)}`;
             const filePath = path.join(uploadDir, filename);
 
-            // Save the image
             await fs.promises.writeFile(filePath, file.buffer as any);
 
-            // Process image for face recognition
             const faceDescriptor = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
 
             if (!faceDescriptor) {
-                throw new Error('No face detected in the image');
+                throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh');
             }
 
-            // Update user with new avatar and face data
-            const user = await this.userModel.findByIdAndUpdate(
+            const updatedUser = await this.userModel.findByIdAndUpdate(
                 userId,
                 {
                     avatar: `/images/users/${filename}`,
@@ -358,14 +361,14 @@ export class UsersService {
                 { new: true }
             );
 
-            if (!user) {
-                throw new Error('User not found');
+            if (!updatedUser) {
+                throw new BadRequestException('User not found');
             }
 
-            return user.avatar;
+            return updatedUser.avatar;
         } catch (error) {
             console.error('Error processing image:', error);
-            throw new Error('Failed to process image');
+            throw error;
         }
     }
 }

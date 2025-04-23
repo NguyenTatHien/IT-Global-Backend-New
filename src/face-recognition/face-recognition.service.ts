@@ -8,7 +8,7 @@ faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData:
 
 @Injectable()
 export class FaceRecognitionService {
-    private readonly FACE_DETECTION_THRESHOLD = 0.5; // Ngưỡng phát hiện khuôn mặt
+    private readonly FACE_DETECTION_THRESHOLD = 0.7; // Ngưỡng phát hiện khuôn mặt
     private readonly FACE_MATCHING_THRESHOLD = 0.4; // Ngưỡng so sánh khuôn mặt
     private readonly MIN_FACE_SIZE = 100; // Kích thước tối thiểu của khuôn mặt (pixels)
     private readonly MAX_FACE_DESCRIPTORS = 3; // Số lượng khuôn mặt tối đa cho mỗi người dùng
@@ -128,7 +128,7 @@ export class FaceRecognitionService {
 
         // Kiểm tra độ tin cậy của phát hiện khuôn mặt
         console.log(`Detection score: ${detections[0].detection.score}`);
-        if (detections[0].detection.score < 0.7) { // Giảm từ 0.5 xuống 0.3
+        if (detections[0].detection.score < this.FACE_DETECTION_THRESHOLD) { // Giảm từ 0.5 xuống 0.3
             console.log('Detection score too low');
             throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
         }

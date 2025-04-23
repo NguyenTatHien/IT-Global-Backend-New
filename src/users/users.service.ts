@@ -140,7 +140,8 @@ export class UsersService {
     }
 
     async findForLogin() {
-        return await this.userModel.find();
+        const users = await this.userModel.find();
+        return users;
     }
 
     async findAll(currentPage: number, limit: number, qs: string) {

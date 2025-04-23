@@ -134,6 +134,7 @@ export class AuthService {
                 _id: matchedUser._id,
                 name: matchedUser.name,
                 email: matchedUser.email,
+                image: matchedUser.image,
                 role: {
                     _id: roleDetails._id,
                     name: roleDetails.name

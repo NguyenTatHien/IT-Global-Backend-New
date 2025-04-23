@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(payload: IUser) {
-        const { _id, name, email, role } = payload;
+        const { _id, name, email, role, image } = payload;
 
         if (!role) {
             throw new UnauthorizedException('Role is missing or invalid in JWT payload');
@@ -41,6 +41,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             name,
             email,
             role,
+            image,
             permissions: roleWithPermissions.permissions ?? [],
         };
     }

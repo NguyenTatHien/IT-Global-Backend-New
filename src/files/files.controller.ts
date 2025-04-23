@@ -10,6 +10,7 @@ import {
     UploadedFile,
     ParseFilePipeBuilder,
     HttpStatus,
+    BadRequestException,
 } from "@nestjs/common";
 import { FilesService } from "./files.service";
 import { CreateFileDto } from "./dto/create-file.dto";
@@ -28,12 +29,8 @@ export class FilesController {
     uploadFile(
         @UploadedFile(
             new ParseFilePipeBuilder()
-                .addFileTypeValidator({
-                    fileType:
-                        /^(jpg|jpeg|image\/jpeg|png|image\/png|gif|txt|pdf|application\/pdf|doc|docx|text\/plain)$/i,
-                })
                 .addMaxSizeValidator({
-                    maxSize: 1024 * 1024,
+                    maxSize: 1024 * 1024, // 1MB
                 })
                 .build({
                     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -41,6 +38,20 @@ export class FilesController {
         )
         file: Express.Multer.File,
     ) {
+        const allowedMimeTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'text/plain',
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
+
+        if (!allowedMimeTypes.includes(file.mimetype)) {
+            throw new BadRequestException(`File type ${file.mimetype} is not allowed. Allowed types are: ${allowedMimeTypes.join(', ')}`);
+        }
+
         return {
             fileName: file.filename,
         };

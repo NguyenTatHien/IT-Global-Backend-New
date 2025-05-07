@@ -6,4 +6,4 @@
 
 =================
 
-Tác giả: OptimusFaker
+Tác giả: Nguyễn Tất Hiển

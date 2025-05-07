@@ -48,9 +48,6 @@ export class User {
     @Prop({ type: Boolean, default: false })
     isFaceVerified: boolean;
 
-    @Prop({ type: Object })
-    permissions: Record<string, any>;
-
     @Prop()
     refreshToken: string;
 

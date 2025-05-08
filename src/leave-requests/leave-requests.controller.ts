@@ -1,34 +1,54 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req } from '@nestjs/common';
 import { LeaveRequestsService } from './leave-requests.service';
-import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
-import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
+import { CreateLeaveRequestDto, LeaveStatus } from './dto/create-leave-request.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Permissions } from '../decorator/customize';
+import { Request } from 'express';
 
 @Controller('leave-requests')
+@UseGuards(JwtAuthGuard)
 export class LeaveRequestsController {
-  constructor(private readonly leaveRequestsService: LeaveRequestsService) {}
+    constructor(private readonly leaveRequestsService: LeaveRequestsService) { }
 
-  @Post()
-  create(@Body() createLeaveRequestDto: CreateLeaveRequestDto) {
-    return this.leaveRequestsService.create(createLeaveRequestDto);
-  }
+    @Post()
+    async create(@Body() createLeaveRequestDto: CreateLeaveRequestDto, @Req() req: Request) {
+        return this.leaveRequestsService.create(createLeaveRequestDto, req.user['_id']);
+    }
 
-  @Get()
-  findAll() {
-    return this.leaveRequestsService.findAll();
-  }
+    @Get()
+    @Permissions('leave-request:get_paginate')
+    async findAll(@Query() query: any) {
+        return this.leaveRequestsService.findAll(query);
+    }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.leaveRequestsService.findOne(+id);
-  }
+    @Get('my-requests')
+    async findMyRequests(@Query() query: any, @Req() req: Request) {
+        return this.leaveRequestsService.findMyRequests(req.user['_id'], query);
+    }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateLeaveRequestDto: UpdateLeaveRequestDto) {
-    return this.leaveRequestsService.update(+id, updateLeaveRequestDto);
-  }
+    @Get(':id')
+    @Permissions('leave-request:get_paginate')
+    async findOne(@Param('id') id: string) {
+        return this.leaveRequestsService.findOne(id);
+    }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.leaveRequestsService.remove(+id);
-  }
+    @Patch(':id/status')
+    @Permissions('leave-request:update')
+    async updateStatus(
+        @Param('id') id: string,
+        @Body() body: { status: LeaveStatus; comment?: string },
+        @Req() req: Request
+    ) {
+        return this.leaveRequestsService.updateStatus(
+            id,
+            body.status,
+            body.comment,
+            req.user['_id']
+        );
+    }
+
+    @Delete(':id')
+    async remove(@Param('id') id: string, @Req() req: Request) {
+        return this.leaveRequestsService.delete(id, req.user['_id']);
+    }
 }

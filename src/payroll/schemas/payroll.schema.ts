@@ -1,41 +1,43 @@
 // BE-Test/src/payroll/payroll.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import mongoose, { Document, HydratedDocument, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 import { User } from '../../users/schemas/user.schema';
-
-export type PayrollDocument = HydratedDocument<Payroll>;
+import { PayrollStatus } from '../dto/create-payroll.dto';
 
 @Schema({ timestamps: true })
-export class Payroll{
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true })
-  userId: User;
+export class Payroll extends Document {
+    @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+    user: Types.ObjectId;
 
-  @Prop({ required: true })
-  month: number;
+    @Prop({ required: true })
+    month: Date;
 
-  @Prop({ required: true })
-  year: number;
+    @Prop({ required: true })
+    baseSalary: number;
 
-  @Prop({ required: true })
-  totalHours: number;
+    @Prop({ default: 0 })
+    overtimePay: number;
 
-  @Prop({ required: true })
-  overtimeHours: number;
+    @Prop({ default: 0 })
+    bonus: number;
 
-  @Prop({ required: true })
-  baseSalary: number;
+    @Prop({ default: 0 })
+    deductions: number;
 
-  @Prop({ required: true })
-  overtimePay: number;
+    @Prop()
+    note?: string;
 
-  @Prop({ required: true })
-  deductions: number;
+    @Prop({ type: String, enum: PayrollStatus, default: PayrollStatus.PENDING })
+    status: PayrollStatus;
 
-  @Prop({ required: true })
-  netSalary: number;
+    @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
+    approvedBy?: Types.ObjectId;
 
-  @Prop({ default: 'pending' })
-  status: string; // pending, paid
+    @Prop()
+    approvedAt?: Date;
+
+    @Prop()
+    paidAt?: Date;
 }
 
 export const PayrollSchema = SchemaFactory.createForClass(Payroll);

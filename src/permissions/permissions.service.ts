@@ -7,13 +7,15 @@ import { Permission, PermissionDocument } from "./schemas/permission.schema";
 import { SoftDeleteModel } from "soft-delete-plugin-mongoose";
 import mongoose from "mongoose";
 import aqp from "api-query-params";
+import { Model } from 'mongoose';
 
 @Injectable()
 export class PermissionsService {
     constructor(
         @InjectModel(Permission.name)
         private permissionModel: SoftDeleteModel<PermissionDocument>,
-    ) {}
+        @InjectModel(Permission.name) private permissionModelMongoose: Model<Permission>
+    ) { }
     async create(createPermissionDto: CreatePermissionDto, user: IUser) {
         const { name, apiPath, method, module } = createPermissionDto;
         const isExist = await this.permissionModel.findOne({ apiPath, method });
@@ -112,5 +114,17 @@ export class PermissionsService {
             },
         );
         return this.permissionModel.softDelete({ _id: id });
+    }
+
+    async findByModule(module: string) {
+        return this.permissionModelMongoose.find({ module }).exec();
+    }
+
+    async checkPermission(userId: string, permission: string): Promise<boolean> {
+        const userPermissions = await this.permissionModelMongoose.find({
+            users: userId,
+            name: permission
+        }).exec();
+        return userPermissions.length > 0;
     }
 }

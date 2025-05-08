@@ -8,48 +8,48 @@ export type AttendanceDocument = Attendance & Document;
 
 @Schema({ timestamps: true })
 export class Attendance {
-  @Prop({ required: true })
-  userId: string;
+    @Prop({ required: true })
+    userId: string;
 
-  @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'UserShift' })
-  userShiftId: string;
+    @Prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'UserShift' })
+    userShiftId: string;
 
-  @Prop({ required: true })
-  checkInTime: Date;
+    @Prop({ required: true })
+    checkInTime: Date;
 
-  @Prop()
-  checkOutTime: Date;
+    @Prop()
+    checkOutTime: Date;
 
-  @Prop({ required: true, enum: ['on-time', 'late', 'absent', 'early'] })
-  status: string;
+    @Prop({ required: true, enum: ['on-time', 'late', 'absent', 'early'] })
+    status: string;
 
-  @Prop({ default: 0 })
-  totalHours: number;
+    @Prop({ default: 0 })
+    totalHours: number;
 
-  @Prop({ default: 0 })
-  overtimeHours: number;
+    @Prop({ default: 0 })
+    overtimeHours: number;
 
-  @Prop({ default: 0 })
-  lateMinutes: number;
+    @Prop({ default: 0 })
+    lateMinutes: number;
 
-  @Prop({ default: 0 })
-  earlyMinutes: number;
+    @Prop({ default: 0 })
+    earlyMinutes: number;
 
-  @Prop({ type: Object })
-  location: { latitude: number; longitude: number };
+    @Prop({ type: Object })
+    location: { latitude: number; longitude: number };
 
-  @Prop({ default: false })
-  isDeleted: boolean;
+    @Prop({ default: false })
+    isDeleted: boolean;
 
-  @Prop()
-  deletedAt: Date;
+    @Prop()
+    deletedAt: Date;
 
-  @Prop()
-  updatedBy: string;
+    @Prop()
+    updatedBy: string;
 
-  createdAt: Date;
-  updatedAt: Date;
-  __v: number;
+    createdAt: Date;
+    updatedAt: Date;
+    __v: number;
 }
 
 export const AttendanceSchema = SchemaFactory.createForClass(Attendance);

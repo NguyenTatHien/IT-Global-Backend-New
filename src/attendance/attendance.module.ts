@@ -4,16 +4,19 @@ import { AttendanceService } from './attendance.service';
 import { AttendanceController } from './attendance.controller';
 import { Attendance, AttendanceSchema } from './schemas/attendance.schema';
 import { UserShiftsModule } from '../user-shifts/user-shifts.module';
+import { CompaniesService } from 'src/companies/companies.service';
+import { CompaniesModule } from 'src/companies/companies.module';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Attendance.name, schema: AttendanceSchema }
-    ]),
-    UserShiftsModule
-  ],
-  controllers: [AttendanceController],
-  providers: [AttendanceService],
-  exports: [AttendanceService]
+    imports: [
+        MongooseModule.forFeature([
+            { name: Attendance.name, schema: AttendanceSchema }
+        ]),
+        UserShiftsModule,
+        CompaniesModule
+    ],
+    controllers: [AttendanceController],
+    providers: [AttendanceService],
+    exports: [AttendanceService]
 })
-export class AttendanceModule {}
+export class AttendanceModule { }

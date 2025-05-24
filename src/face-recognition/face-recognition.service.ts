@@ -1,171 +1,203 @@
-import * as faceapi from 'face-api.js';
-import { Canvas, Image, ImageData, createCanvas, loadImage } from 'canvas';
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { join } from 'path';
-import * as fs from "fs";
-
-faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData: ImageData as any });
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
+import FormData from 'form-data';
+import https from 'https';
+import * as fs from 'fs';
 
 @Injectable()
 export class FaceRecognitionService {
-    private readonly FACE_DETECTION_THRESHOLD = 0.7; // Ngưỡng phát hiện khuôn mặt
-    private readonly FACE_MATCHING_THRESHOLD = 0.4; // Ngưỡng so sánh khuôn mặt
-    private readonly MIN_FACE_SIZE = 100; // Kích thước tối thiểu của khuôn mặt (pixels)
-    private readonly MAX_FACE_DESCRIPTORS = 3; // Số lượng khuôn mặt tối đa cho mỗi người dùng
-    private readonly FACE_SIMILARITY_THRESHOLD = 0.5; // Ngưỡng độ tương đồng giữa các khuôn mặt
+    private readonly FACE_DETECTION_THRESHOLD = 0.3;
+    private readonly MIN_FACE_SIZE = 20;
+    private readonly axiosInstance;
 
-    constructor() {
-        this.loadModels();
+    constructor(private configService: ConfigService) {
+        this.axiosInstance = axios.create({
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: false
+            })
+        });
     }
 
-    async loadModels() {
-        const modelPath = join(__dirname, '..', 'models');
-        await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
-        await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
-        await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
-        await faceapi.nets.faceExpressionNet.loadFromDisk(modelPath);
-    }
-
-    async detectFace(imageBuffer: Buffer) {
-        const img = await loadImage(imageBuffer);
-        const detections = await faceapi.detectAllFaces(img as any)
-            .withFaceLandmarks()
-            .withFaceExpressions()
-            .withFaceDescriptors();
-        return detections;
-    }
-
-    async verifyFace(imageBuffer: Buffer, userDescriptor: Float32Array) {
-        const detections = await this.detectFace(imageBuffer);
-        if (detections.length === 0) {
-            throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh.');
+    async processFace(imagePath: string): Promise<any> {
+        try {
+            const buffer = fs.readFileSync(imagePath);
+            return this.processFaceFromBuffer(buffer);
+        } catch (error) {
+            console.error('Error processing face from file:', error);
+            throw new BadRequestException('Lỗi xử lý ảnh khuôn mặt. Vui lòng thử lại.');
         }
+    }
 
-        // Kiểm tra kích thước khuôn mặt
-        const faceSize = Math.max(
-            detections[0].detection.box.width,
-            detections[0].detection.box.height,
-        );
-        if (faceSize < this.MIN_FACE_SIZE) {
-            throw new BadRequestException(
-                'Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.'
+    async processFaceFromBuffer(buffer: Buffer): Promise<any> {
+        try {
+            const formData = new FormData();
+            formData.append('image', buffer, {
+                filename: 'face.jpg',
+                contentType: 'image/jpeg',
+            });
+
+            const response = await this.axiosInstance.post(
+                `${this.configService.get('PYTHON_API_URL')}/extract-embedding`,
+                formData,
+                // {
+                //     headers: {
+                //         ...formData.getHeaders(),
+                //     },
+                // }
             );
-        }
 
-        // Kiểm tra độ tin cậy của phát hiện khuôn mặt
-        if (detections[0].detection.score < this.FACE_DETECTION_THRESHOLD) {
-            throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
-        }
+            const data = response.data;
+            const detections = data.faceDescriptor;
 
-        const faceMatcher = new faceapi.FaceMatcher(userDescriptor);
-        const bestMatch = faceMatcher.findBestMatch(detections[0].descriptor);
-        return bestMatch.distance < this.FACE_MATCHING_THRESHOLD;
+            if (!detections || detections.length === 0) {
+                throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh. Vui lòng đảm bảo khuôn mặt nằm trong khung hình và ánh sáng đủ.');
+            }
+
+            // if (detections.length > 1) {
+            //     throw new BadRequestException('Phát hiện nhiều khuôn mặt. Vui lòng chỉ chụp một khuôn mặt.');
+            // }
+
+            // const faceSize = Math.max(
+            //     detections[0].box.width,
+            //     detections[0].box.height
+            // );
+
+            // if (faceSize < this.MIN_FACE_SIZE) {
+            //     throw new BadRequestException('Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.');
+            // }
+
+            // if (detections[0].score < this.FACE_DETECTION_THRESHOLD) {
+            //     throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng đảm bảo ánh sáng đủ và khuôn mặt rõ ràng.');
+            // }
+
+            return detections;
+        } catch (error) {
+            console.error('Error processing face:', error);
+            if (error.response?.data?.message) {
+                throw new BadRequestException(error.response.data.message);
+            }
+            throw new BadRequestException('Lỗi xử lý khuôn mặt. Vui lòng thử lại.');
+        }
     }
 
-    async processFace(imagePath: string) {
-        const img = (await loadImage(fs.readFileSync(imagePath))) as any;
-        const detections = await faceapi.detectSingleFace(img)
-            .withFaceLandmarks()
-            .withFaceExpressions()
-            .withFaceDescriptor();
-
-        if (!detections) return null;
-        // Kiểm tra kích thước khuôn mặt
-        const faceSize = Math.max(
-            detections.detection.box.width,
-            detections.detection.box.height
-        );
-        if (faceSize < this.MIN_FACE_SIZE) {
-            throw new BadRequestException(
-                'Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.'
+    async findMatchingUser(users: any[], faceDescriptor: number[]): Promise<any> {
+        try {
+            const response = await this.axiosInstance.post(
+                `${this.configService.get('PYTHON_API_URL')}/find-matching-user`,
+                {
+                    users,
+                    faceDescriptor,
+                }
             );
-        }
 
-        // Kiểm tra độ tin cậy của phát hiện khuôn mặt
-        if (detections.detection.score < this.FACE_DETECTION_THRESHOLD) {
-            throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
-        }
+            if (!response.data.success) {
+                throw new BadRequestException(response.data.message || 'Không tìm thấy người dùng phù hợp');
+            }
 
-        return Array.from(detections.descriptor);
+            return response.data.user;
+        } catch (error) {
+            console.error('Error finding matching user:', error);
+            if (error.response?.data?.message) {
+                throw new BadRequestException(error.response.data.message);
+            }
+            throw new BadRequestException('Lỗi tìm kiếm người dùng phù hợp');
+        }
     }
 
-    async processFaceFromBuffer(buffer: Buffer) {
-        console.log('Processing face from buffer');
-        const img = await loadImage(buffer);
-        const canvas = createCanvas(img.width, img.height) as any;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, img.width, img.height);
+    async compareFaces(descriptor1: number[], descriptor2: number[]): Promise<{ matched: boolean; distance: number }> {
+        try {
+            const response = await this.axiosInstance.post(
+                `${this.configService.get('PYTHON_API_URL')}/compare-faces`,
+                {
+                    descriptor1,
+                    descriptor2,
+                }
+            );
 
-        console.log('Detecting faces');
-        const detections = await faceapi
-            .detectAllFaces(canvas)
-            .withFaceLandmarks()
-            .withFaceExpressions()
-            .withFaceDescriptors();
+            if (!response.data.success) {
+                throw new BadRequestException(response.data.message || 'Lỗi so sánh khuôn mặt');
+            }
 
-        if (!detections || detections.length === 0) {
-            console.log('No face detected');
-            throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh.');
+            return {
+                matched: response.data.matched,
+                distance: response.data.distance,
+            };
+        } catch (error) {
+            console.error('Error comparing faces:', error);
+            if (error.response?.data?.message) {
+                throw new BadRequestException(error.response.data.message);
+            }
+            throw new BadRequestException('Lỗi so sánh khuôn mặt');
         }
-
-        if (detections.length > 1) {
-            console.log('Multiple faces detected');
-            throw new BadRequestException('Phát hiện nhiều khuôn mặt. Vui lòng chỉ chụp một khuôn mặt.');
-        }
-
-        // Kiểm tra kích thước khuôn mặt
-        const faceSize = Math.max(
-            detections[0].detection.box.width,
-            detections[0].detection.box.height,
-        );
-        console.log(`Face size: ${faceSize}`);
-
-        // Giảm ngưỡng kích thước khuôn mặt tối thiểu
-        if (faceSize < 50) { // Giảm từ 100 xuống 50
-            console.log('Face too small');
-            throw new BadRequestException('Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn.');
-        }
-
-        // Kiểm tra độ tin cậy của phát hiện khuôn mặt
-        console.log(`Detection score: ${detections[0].detection.score}`);
-        if (detections[0].detection.score < this.FACE_DETECTION_THRESHOLD) { // Giảm từ 0.5 xuống 0.3
-            console.log('Detection score too low');
-            throw new BadRequestException('Độ tin cậy phát hiện khuôn mặt quá thấp. Vui lòng thử lại.');
-        }
-
-        // Bỏ qua các kiểm tra về kính mắt và biểu cảm để đơn giản hóa quá trình
-        console.log('Face processed successfully');
-        return Array.from(detections[0].descriptor);
     }
 
-    compareFaces(descriptor1: number[], descriptor2: number[]): boolean {
-        if (descriptor1.length !== descriptor2.length) {
-            throw new Error('Descriptors must have the same length');
-        }
+    async calculateFaceSimilarity(descriptor1: number[], descriptor2: number[]): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.post(
+                `${this.configService.get('PYTHON_API_URL')}/compare-faces`,
+                {
+                    face1: descriptor1,
+                    face2: descriptor2,
+                }
+            );
 
-        const distance = Math.sqrt(descriptor1.reduce((sum, val, i) => sum + (val - descriptor2[i]) ** 2, 0));
-        return distance < this.FACE_MATCHING_THRESHOLD;
+            if (!response.data.success) {
+                throw new BadRequestException(response.data.message || 'Lỗi tính toán độ tương đồng');
+            }
+
+            return response.data.isMatch;
+        } catch (error) {
+            console.error('Error calculating similarity:', error);
+            if (error.response?.data?.message) {
+                throw new BadRequestException(error.response.data.message);
+            }
+            throw new BadRequestException('Lỗi tính toán độ tương đồng');
+        }
     }
 
-    async addNewFaceDescriptor(userId: string, faceDescriptor: number[]) {
-        // Lưu face descriptor mới vào database
-        // Implement this method in UsersService
-        return true;
+    async validateFaceDescriptor(faceDescriptor: number[]): Promise<boolean> {
+        try {
+            const response = await this.axiosInstance.post(
+                `${this.configService.get('PYTHON_API_URL')}/validate-descriptor`,
+                {
+                    faceDescriptor,
+                }
+            );
+
+            if (!response.data.success) {
+                throw new BadRequestException(response.data.message || 'Face descriptor không hợp lệ');
+            }
+
+            return response.data.isValid;
+        } catch (error) {
+            console.error('Error validating face descriptor:', error);
+            if (error.response?.data?.message) {
+                throw new BadRequestException(error.response.data.message);
+            }
+            throw new BadRequestException('Lỗi kiểm tra face descriptor');
+        }
     }
 
-    calculateFaceSimilarity(descriptor1: number[], descriptor2: number[]): number {
-        if (descriptor1.length !== descriptor2.length) {
-            throw new Error('Descriptors must have the same length');
+    async saveFaceDescriptor(userId: string, faceDescriptor: number[]): Promise<void> {
+        try {
+            const response = await this.axiosInstance.post(
+                `${this.configService.get('PYTHON_API_URL')}/save-descriptor`,
+                {
+                    userId,
+                    faceDescriptor,
+                }
+            );
+
+            if (!response.data.success) {
+                throw new BadRequestException(response.data.message || 'Lỗi lưu face descriptor');
+            }
+        } catch (error) {
+            console.error('Error saving face descriptor:', error);
+            if (error.response?.data?.message) {
+                throw new BadRequestException(error.response.data.message);
+            }
+            throw new BadRequestException('Lỗi lưu face descriptor');
         }
-
-        // Tính khoảng cách Euclidean giữa hai descriptor
-        const distance = Math.sqrt(
-            descriptor1.reduce((sum, val, i) => sum + Math.pow(val - descriptor2[i], 2), 0)
-        );
-
-        // Chuyển đổi khoảng cách thành điểm tương đồng (0-1)
-        // Khoảng cách càng nhỏ thì điểm tương đồng càng cao
-        const similarity = 1 / (1 + distance);
-        return similarity;
     }
 }

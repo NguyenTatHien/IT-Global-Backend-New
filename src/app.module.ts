@@ -26,6 +26,8 @@ import { PayrollModule } from './payroll/payroll.module';
 import { ReportsModule } from './reports/reports.module';
 import { SystemConfigsModule } from './system-configs/system-configs.module';
 import { SystemLogsModule } from './system-logs/system-logs.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { CompaniesModule } from './companies/companies.module';
 
 @Module({
     imports: [
@@ -71,7 +73,9 @@ import { SystemLogsModule } from './system-logs/system-logs.module';
         PayrollModule,
         ReportsModule,
         SystemConfigsModule,
-        SystemLogsModule
+        SystemLogsModule,
+        DepartmentsModule,
+        CompaniesModule
     ],
     controllers: [AppController],
     providers: [

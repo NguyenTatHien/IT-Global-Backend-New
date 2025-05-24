@@ -1,153 +1,260 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import face_recognition
-from pymongo import MongoClient
-import base64
-from io import BytesIO
 import os
 from PIL import Image
 import numpy as np
-
+from io import BytesIO
+import json
+from werkzeug.utils import secure_filename
+import cv2
+import io
+import base64
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 UPLOAD_FOLDER = 'public/images/user'  # Folder where images are stored
+EMBEDDING_FILE = 'face_embeddings.json'  # File lưu embedding
 
-def get_db_connection():
-    client = MongoClient("mongodb+srv://tathien2003:Hien0908127818@cluster0.8n0cg.mongodb.net")
-    db = client["nestjs"]  # Tên database
-    return db
+# Constants
+FACE_DETECTION_THRESHOLD = 0.6
+FACE_MATCHING_THRESHOLD = 0.4
+MIN_FACE_SIZE = 100
 
-@app.route('/compare-image', methods=['POST'])
+def process_image(image_data):
+    """Convert image data to numpy array"""
+    nparr = np.frombuffer(image_data, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    return img
+
+def detect_face(image):
+    """Detect face in image and return face encoding"""
+    # Convert BGR to RGB
+    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # Detect faces
+    face_locations = face_recognition.face_locations(rgb_image)
+
+    if not face_locations:
+        return None, "Không phát hiện khuôn mặt trong ảnh"
+
+    if len(face_locations) > 1:
+        return None, "Phát hiện nhiều khuôn mặt. Vui lòng chỉ chụp một khuôn mặt"
+
+    # Get face encoding
+    face_encoding = face_recognition.face_encodings(rgb_image, face_locations)[0]
+
+    # Check face size
+    top, right, bottom, left = face_locations[0]
+    face_size = max(bottom - top, right - left)
+    if face_size < MIN_FACE_SIZE:
+        return None, "Khuôn mặt quá nhỏ. Vui lòng đứng gần camera hơn"
+
+    return face_encoding, None
+
+# Đăng ký khuôn mặt mới
+@app.route('/register-face', methods=['POST'])
+def register_face():
+    if 'image' not in request.files or 'employeeCode' not in request.form:
+        return jsonify({"success": False, "message": "Missing image or employeeCode"}), 400
+    file = request.files['image']
+    employee_code = request.form['employeeCode']
+    if file.filename == '':
+        return jsonify({"success": False, "message": "No selected file"}), 400
+    # Tạo folder theo mã nhân viên
+    save_dir = os.path.join(UPLOAD_FOLDER, secure_filename(employee_code))
+    os.makedirs(save_dir, exist_ok=True)
+    # Lưu file ảnh
+    filename = secure_filename(file.filename)
+    save_path = os.path.join(save_dir, filename)
+    file.save(save_path)
+    # Trích xuất embedding
+    img = face_recognition.load_image_file(save_path)
+    encodings = face_recognition.face_encodings(img)
+    if len(encodings) == 0:
+        return jsonify({"success": False, "message": "No face detected in the image"}), 400
+    embedding = encodings[0].tolist()
+    # Đọc file embedding hiện tại (nếu có)
+    data = {}
+    if os.path.exists(EMBEDDING_FILE):
+        try:
+            with open(EMBEDDING_FILE, 'r') as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception as e:
+            print(f"Error reading embedding file: {e}")
+            data = {}
+    # Thêm hoặc cập nhật embedding cho mã nhân viên
+    is_update = employee_code in data
+    data[employee_code] = embedding
+    with open(EMBEDDING_FILE, 'w') as f:
+        json.dump(data, f)
+    if is_update:
+        return jsonify({"success": True, "message": "Face updated successfully"})
+    else:
+        return jsonify({"success": True, "message": "Face registered successfully"})
+
+# Nhận diện khuôn mặt
+@app.route('/compare-image', methods=['POST', 'OPTIONS'])
 def compare_image():
+    if request.method == 'OPTIONS':
+        return '', 200
+    if 'image' not in request.files:
+        return jsonify({"success": False, "message": "No image file provided"}), 400
+    file = request.files['image']
+    file_bytes = file.read()
+    # Trích xuất embedding từ ảnh mới
+    img = face_recognition.load_image_file(BytesIO(file_bytes))
+    encodings = face_recognition.face_encodings(img)
+    if len(encodings) == 0:
+        return jsonify({"success": False, "message": "Bạn không có trong hệ thống công ty"}), 400
+    if len(encodings) > 1:
+        return jsonify({"success": False, "message": "More than one face detected in the image. Please make sure only one face is visible."}), 400
+    new_embedding = encodings[0]
+    # Load embedding đã lưu
+    if not os.path.exists(EMBEDDING_FILE):
+        return jsonify({"success": False, "message": "No registered embeddings found"}), 404
+    with open(EMBEDDING_FILE, 'r') as f:
+        data = json.load(f)
+    if not data:
+        return jsonify({"success": False, "message": "No registered embeddings found"}), 404
+    employee_codes = list(data.keys())
+    embeddings = np.array([data[code] for code in employee_codes])
+    # So sánh embedding
+    distances = np.linalg.norm(embeddings - new_embedding, axis=1)
+    min_idx = np.argmin(distances)
+    threshold = 0.4  # Giảm ngưỡng nhận diện để tăng độ chính xác
+    if distances[min_idx] < threshold:
+        return jsonify({
+            "success": True,
+            "employeeCode": employee_codes[min_idx],
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "message": "No matching face found"
+        })
+
+@app.route('/extract-embedding', methods=['POST'])
+def extract_embedding():
+    if 'image' not in request.files:
+        return jsonify({"success": False, "message": "No image file provided"}), 400
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({"success": False, "message": "No selected file"}), 400
+    img = face_recognition.load_image_file(file)
+    encodings = face_recognition.face_encodings(img)
+    if len(encodings) == 0:
+        return jsonify({"success": False, "message": "No face detected in the image"}), 400
+    embedding = encodings[0].tolist()
+    return jsonify({"success": True, "faceDescriptor": embedding})
+
+@app.route('/process-face', methods=['POST'])
+def process_face():
     try:
-        data = request.json
-        image_data = data['image']
-        print("Received image data:", image_data[:100])  # Print the first 100 characters to verify
-
-        # Decode the base64 image
-        try:
-            image_data = image_data.split(',')[1]  # Extract the base64 part of the image data
-            image_bytes = base64.b64decode(image_data)
-            img = Image.open(BytesIO(image_bytes))
-            img.verify()  # Verify that it is an image
-            img = Image.open(BytesIO(image_bytes))  # Reopen for processing
-        except Exception as e:
-            print("Error decoding base64 image or opening image:", str(e))
-            return jsonify({"success": False, "message": "Invalid image format"}), 400
-
-        # Convert PIL image to a format that face_recognition can process
-        try:
-            img_byte_arr = BytesIO()
-            img.save(img_byte_arr, format='PNG')
-            img_byte_arr = img_byte_arr.getvalue()
-            img_array = face_recognition.load_image_file(BytesIO(img_byte_arr))
-        except Exception as e:
-            print("Error converting PIL image to image array:", str(e))
-            return jsonify({"success": False, "message": "Error processing image"}), 400
-
-        # Get face encodings
-        try:
-            img_encoding = face_recognition.face_encodings(img_array)
-            if len(img_encoding) == 0:
-                return jsonify({"success": False, "message": "No face detected in the image"}), 400
-            img_encoding = img_encoding[0]
-        except Exception as e:
-            print("Error getting face encodings:", str(e))
-            return jsonify({"success": False, "message": "Error detecting faces"}), 400
-
-        # Compare with images in the uploads folder
-        user_found = False
-        user_name = None
-        db = get_db_connection()
-        users = db.users.find({}, {"name": 1, "email": 1, "designation": 1, "image": 1, "_id": 0})
-
-        for user in users:
-            file_name = user['image']
-            file_path = os.path.join(UPLOAD_FOLDER, file_name)
-
-            if not os.path.exists(file_path):
-                continue
-
-            try:
-                stored_img = Image.open(file_path)
-                stored_img.verify()  # Verify that it is an image
-                stored_img = Image.open(file_path)  # Reopen for processing
-                stored_img_array = face_recognition.load_image_file(file_path)
-                stored_img_encoding = face_recognition.face_encodings(stored_img_array)
-                if len(stored_img_encoding) == 0:
-                    continue
-                stored_img_encoding = stored_img_encoding[0]
-
-                # Compare the captured image with stored images
-                results = face_recognition.compare_faces([stored_img_encoding], img_encoding)
-                if results[0]:
-                    user_found = True
-                    user_name = user['name']
-                    user_email = user['email']
-                    user_designation = user['designation']
-                    user_image = user['image']
-                    break
-
-            except Exception as e:
-                print("Error processing stored image:", str(e))
-
-        if user_found:
+        if 'image' not in request.files:
             return jsonify({
-                "success": True,
-                "name": user_name,
-                "email": user_email,
-                "designation": user_designation,
-                "image": user_image
-            })
-        else:
-            return jsonify({"success": False, "message": "No matching user found"})
+                'success': False,
+                'message': 'Không tìm thấy ảnh trong request'
+            }), 400
+
+        image_file = request.files['image']
+        image_data = image_file.read()
+
+        # Process image
+        image = process_image(image_data)
+        face_encoding, error = detect_face(image)
+
+        if error:
+            return jsonify({
+                'success': False,
+                'message': error
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'faceDescriptor': face_encoding.tolist()
+        })
 
     except Exception as e:
-        print("An error occurred:", str(e))
-        return jsonify({"success": False, "message": "An error occurred on the server"}), 500
+        return jsonify({
+            'success': False,
+            'message': f'Lỗi xử lý ảnh: {str(e)}'
+        }), 500
 
-@app.route('/uploads/<filename>')
-def serve_image(filename):
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    if not os.path.isfile(file_path):
-        print(f"File not found: {file_path}")
-        return jsonify({"success": False, "message": "File not found"}), 404
+@app.route('/compare-faces', methods=['POST'])
+def compare_faces():
+    try:
+        data = request.json
+        face1 = np.array(data['face1'])
+        face2 = np.array(data['face2'])
 
-    return send_from_directory(UPLOAD_FOLDER, filename)
+        # Calculate face distance
+        face_distance = face_recognition.face_distance([face1], face2)[0]
+        is_match = face_distance < FACE_MATCHING_THRESHOLD
 
-def train_all_users():
-    db = get_db_connection()
-    users = db.users.find({}, {"image": 1, "_id": 1})
+        return jsonify({
+            'success': True,
+            'isMatch': bool(is_match),
+            'distance': float(face_distance)
+        })
 
-    for user in users:
-        image = user.get('image')
-        if not image:
-            print(f"User {user['_id']} has no image.")
-            continue
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Lỗi so sánh khuôn mặt: {str(e)}'
+        }), 500
 
-        file_path = os.path.join(UPLOAD_FOLDER, image)
-        if not os.path.exists(file_path):
-            print(f"File not found: {file_path}")
-            continue
+@app.route('/find-matching-user', methods=['POST'])
+def find_matching_user():
+    try:
+        data = request.json
+        face_descriptor = np.array(data['faceDescriptor'])
+        users = data['users']
 
-        try:
-            img = face_recognition.load_image_file(file_path)
-            encodings = face_recognition.face_encodings(img)
-            if len(encodings) == 0:
-                print(f"No face found in {file_path}")
+        best_match = None
+        highest_similarity = 0
+
+        for user in users:
+            if not user.get('faceDescriptors'):
                 continue
-            encoding = encodings[0]
-            # Chuyển numpy array thành list để lưu vào MongoDB
-            encoding_list = encoding.tolist()
-            db.users.update_one(
-                {"_id": user["_id"]},
-                {"$set": {"face_encoding": encoding_list}}
-            )
-            print(f"Updated encoding for user {user['_id']}")
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+
+            for stored_descriptor in user['faceDescriptors']:
+                stored_face = np.array(stored_descriptor)
+                face_distance = face_recognition.face_distance([face_descriptor], stored_face)[0]
+                similarity = 1 - face_distance
+
+                if similarity > highest_similarity:
+                    highest_similarity = similarity
+                    best_match = user['id']
+
+        if not best_match or highest_similarity < FACE_MATCHING_THRESHOLD:
+            return jsonify({
+                'success': True,
+                'match': False
+            })
+
+        return jsonify({
+            'success': True,
+            'match': True,
+            'userId': best_match,
+            'similarity': float(highest_similarity)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Lỗi tìm kiếm người dùng: {str(e)}'
+        }), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    print('Exception:', e)
+    print(traceback.format_exc())
+    return jsonify({"success": False, "message": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=9000)
+    app.run(host='0.0.0.0', port=9000, ssl_context=('localhost+1.pem', 'localhost+1-key.pem'))

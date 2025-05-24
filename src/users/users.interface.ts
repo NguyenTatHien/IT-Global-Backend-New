@@ -5,6 +5,12 @@ export interface IUser {
     age: number;
     gender: string;
     address: string;
+    employeeCode: string;
+    department: {
+        _id: string;
+        name: string;
+        prefix: string;
+    };
     role: {
         _id: string;
         name: string;

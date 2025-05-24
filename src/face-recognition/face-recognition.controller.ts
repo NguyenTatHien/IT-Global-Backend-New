@@ -21,7 +21,7 @@ export class FaceRecognitionController {
 
     constructor(
         private readonly faceRecognitionService: FaceRecognitionService,
-    ) {}
+    ) { }
 
     @Public()
     @Post('scan')

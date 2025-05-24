@@ -35,8 +35,11 @@ export class Attendance {
     @Prop({ default: 0 })
     earlyMinutes: number;
 
-    @Prop({ type: Object })
+    @Prop({ type: Object, required: true })
     location: { latitude: number; longitude: number };
+
+    @Prop({ required: true })
+    ipAddress: string;
 
     @Prop({ default: false })
     isDeleted: boolean;

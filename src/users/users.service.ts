@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, ConflictException } from '@nestjs/common';
 import { CreateUserDto, RegisterUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { InjectModel } from "@nestjs/mongoose";
@@ -14,6 +14,7 @@ import { USER_ROLE } from "src/databases/sample";
 import * as fs from 'fs';
 import * as path from 'path';
 import { FaceRecognitionService } from "src/face-recognition/face-recognition.service";
+import { DepartmentsService } from 'src/departments/departments.service';
 
 
 @Injectable()
@@ -21,11 +22,12 @@ export class UsersService {
     constructor(
         @InjectModel(UserM.name)
         private userModel: SoftDeleteModel<UserDocument>,
+        private departmentsService: DepartmentsService,
 
         @InjectModel(Role.name)
         private roleModel: SoftDeleteModel<RoleDocument>,
 
-        private faceRecognitionService: FaceRecognitionService
+        private faceRecognitionService: FaceRecognitionService,
     ) { }
 
     getHashPassword = (password: string) => {
@@ -35,7 +37,7 @@ export class UsersService {
     };
 
     async create(createUserDto: CreateUserDto, @User() user: IUser, file: Express.Multer.File) {
-        const { name, email, password, age, gender, address, role } =
+        const { name, email, password, age, gender, address, role, department } =
             createUserDto;
         const isExistEmail = await this.userModel.findOne({ email });
         if (isExistEmail) {
@@ -44,13 +46,19 @@ export class UsersService {
             );
         }
         const hashPassword = this.getHashPassword(password);
-        const uploadsDir = path.join(__dirname, '../../public/images/user');
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir);
+
+        // Tạo mã nhân viên tự động
+        const employeeCode = await this.generateEmployeeCode(department);
+
+        // Tạo thư mục theo mã nhân viên
+        const userDir = path.join(__dirname, '../../public/images/user', employeeCode);
+        if (!fs.existsSync(userDir)) {
+            fs.mkdirSync(userDir, { recursive: true });
         }
 
-        const fileName = `${file.originalname}`;
-        const imagePath = path.join(uploadsDir, fileName);
+        // Lưu file ảnh vào thư mục đó
+        const fileName = `face.jpg`; // hoặc `${Date.now()}.jpg` nếu muốn nhiều ảnh
+        const imagePath = path.join(userDir, fileName);
         fs.writeFileSync(imagePath, file.buffer as any);
 
         const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
@@ -64,11 +72,13 @@ export class UsersService {
             gender,
             address,
             role,
-            image: fileName,
+            image: `${employeeCode}/${fileName}`,
             faceDescriptors: [faceDescriptor],
             faceCount: 1,
             lastFaceUpdate: new Date(),
             isFaceVerified: true,
+            department,
+            employeeCode,
             createdBy: {
                 _id: user._id,
                 email: user.email,
@@ -140,7 +150,15 @@ export class UsersService {
     }
 
     async findForLogin() {
-        const users = await this.userModel.find();
+        const users = await this.userModel
+            .find({
+                isFaceVerified: true,
+                faceCount: { $gt: 0 },
+                faceDescriptors: { $exists: true, $ne: [] }
+            })
+            .select('_id name email role image faceDescriptors')
+            .populate({ path: 'role', select: '_id name' })
+            .lean();
         return users;
     }
 
@@ -184,7 +202,8 @@ export class UsersService {
             })
             .select("-password")
             .select("-faceDescriptors")
-            .populate({ path: "role", select: { name: 1, _id: 1 } });
+            .populate({ path: "role", select: { name: 1, _id: 1 } })
+            .populate({ path: "department", select: { name: 1, _id: 1 } });
     }
 
     async findOneByUsername(username: string) {
@@ -209,7 +228,7 @@ export class UsersService {
             throw new BadRequestException('User not found');
         }
 
-        let faceDescriptors = foundUser.faceDescriptors || [];
+        let faceDescriptors = foundUser.faceDescriptors;
         let fileName = foundUser.image;
 
         if (file) {
@@ -343,7 +362,7 @@ export class UsersService {
 
             await fs.promises.writeFile(filePath, file.buffer as any);
 
-            const faceDescriptor = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+            const faceDescriptor = await this.faceRecognitionService.processFace(filePath);
 
             if (!faceDescriptor) {
                 throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh');
@@ -370,5 +389,41 @@ export class UsersService {
             console.error('Error processing image:', error);
             throw error;
         }
+    }
+
+    async generateEmployeeCode(departmentId: string) {
+        // Lấy prefix của phòng ban
+        const prefix = await this.departmentsService.getDepartmentPrefix(departmentId);
+        if (!prefix) {
+            throw new BadRequestException('Không tìm thấy prefix của phòng ban');
+        }
+
+        // Tìm mã nhân viên lớn nhất trong toàn bộ hệ thống
+        const latestEmployee = await this.userModel
+            .findOne()
+            .sort({ employeeCode: -1 })
+            .exec();
+
+        let sequence = 1;
+        if (latestEmployee && latestEmployee.employeeCode) {
+            // Lấy số thứ tự từ mã nhân viên cuối cùng
+            const lastSequence = parseInt(latestEmployee.employeeCode.replace(/[^0-9]/g, ''));
+            if (!isNaN(lastSequence)) {
+                sequence = lastSequence + 1;
+            }
+        }
+
+        // Tạo mã nhân viên mới với format: PREFIX + số thứ tự 4 chữ số
+        const newEmployeeCode = `${prefix}${sequence.toString().padStart(4, '0')}`;
+
+        // Kiểm tra xem mã nhân viên mới có bị trùng không
+        const existingEmployee = await this.userModel.findOne({ employeeCode: newEmployeeCode });
+        if (existingEmployee) {
+            // Nếu bị trùng, tăng sequence lên 1 và thử lại
+            sequence++;
+            return this.generateEmployeeCode(departmentId);
+        }
+
+        return newEmployeeCode;
     }
 }

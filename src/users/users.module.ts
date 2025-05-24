@@ -4,7 +4,8 @@ import { UsersController } from "./users.controller";
 import { MongooseModule } from "@nestjs/mongoose";
 import { User, UserSchema } from "./schemas/user.schema";
 import { Role, RoleSchema } from "src/roles/schemas/role.schema";
-import { FaceRecognitionService } from "src/face-recognition/face-recognition.service";
+import { FaceRecognitionModule } from "../face-recognition/face-recognition.module";
+import { DepartmentsModule } from "../departments/departments.module";
 
 @Module({
     imports: [
@@ -12,9 +13,11 @@ import { FaceRecognitionService } from "src/face-recognition/face-recognition.se
             { name: User.name, schema: UserSchema },
             { name: Role.name, schema: RoleSchema },
         ]),
+        FaceRecognitionModule,
+        DepartmentsModule,
     ],
     controllers: [UsersController],
-    providers: [UsersService, FaceRecognitionService],
+    providers: [UsersService],
     exports: [UsersService],
 })
 export class UsersModule { }

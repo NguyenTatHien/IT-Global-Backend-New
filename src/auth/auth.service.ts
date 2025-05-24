@@ -54,9 +54,9 @@ export class AuthService {
             if (!user.faceDescriptors || !Array.isArray(user.faceDescriptors)) continue;
 
             for (const storedDescriptor of user.faceDescriptors) {
-                const similarity = this.faceRecognitionService.calculateFaceSimilarity(faceDescriptors, storedDescriptor);
-                if (similarity > highestSimilarity) {
-                    highestSimilarity = similarity;
+                const similarity = await this.faceRecognitionService.calculateFaceSimilarity(faceDescriptors, storedDescriptor);
+                if (similarity === true) {
+                    // highestSimilarity = similarity;
                     bestMatch = user;
                 }
             }
@@ -160,14 +160,13 @@ export class AuthService {
                 }
             };
         } catch (error) {
-            console.error('Login error:', error);
-            throw error;
+            throw new BadRequestException(error.message);
         }
     }
 
     private async findMatchingUser(users: any[], faceDescriptor: number[]): Promise<IUser | null> {
         let bestMatch: IUser | null = null;
-        let highestSimilarity = 0.7; // Giảm ngưỡng từ 0.4 xuống 0.3
+        let highestSimilarity = 0.4; // Giảm ngưỡng từ 0.4 xuống 0.3
 
         console.log(`Comparing face with ${users.length} users...`);
 
@@ -179,11 +178,16 @@ export class AuthService {
 
             for (const storedDescriptor of user.faceDescriptors) {
                 try {
-                    const similarity = this.faceRecognitionService.calculateFaceSimilarity(faceDescriptor, storedDescriptor);
-                    console.log(`Similarity with user ${user._id}: ${similarity}`);
+                    const similarity = await this.faceRecognitionService.calculateFaceSimilarity(faceDescriptor, storedDescriptor);
+                    // console.log(`Similarity with user ${user._id}: ${similarity}`);
 
-                    if (similarity >= highestSimilarity) {
-                        highestSimilarity = similarity;
+                    // if (similarity >= highestSimilarity) {
+                    //     highestSimilarity = similarity;
+                    //     bestMatch = user as IUser;
+                    // }
+
+                    if (similarity === true) {
+                        // highestSimilarity = similarity;
                         bestMatch = user as IUser;
                     }
                 } catch (error) {

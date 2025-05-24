@@ -1,12 +1,8 @@
-import { IsOptional, IsNumber } from 'class-validator';
+import { IsNumber, IsNotEmpty } from 'class-validator';
 
 export class CheckInDto {
-    @IsOptional()
+    @IsNotEmpty({ message: 'Vị trí không được để trống' })
     @IsNumber()
-    latitude?: number;
-
-    @IsOptional()
-    @IsNumber()
-    longitude?: number;
-  }
-export class CreateAttendanceDto {}
+    location: { latitude: number; longitude: number };
+}
+export class CreateAttendanceDto { }

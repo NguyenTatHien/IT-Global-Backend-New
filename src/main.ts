@@ -1,18 +1,24 @@
 import { NestFactory, Reflector } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { NestExpressApplication } from "@nestjs/platform-express";
-import { join } from "path";
+import path, { join } from "path";
 import { ConfigService } from "@nestjs/config";
 import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { TransformInterceptor } from "./core/transform.interceptor";
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from "cookie-parser";
-
+import fs from 'fs';
 require("dotenv").config();
 
 async function bootstrap() {
-    const app = await NestFactory.create<NestExpressApplication>(AppModule);
+    const httpsOptions = {
+        key: fs.readFileSync('./localhost+1-key.pem'),
+        cert: fs.readFileSync('./localhost+1.pem'),
+    }
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+        httpsOptions
+    });
     const configService = app.get(ConfigService);
 
     const reflector = app.get(Reflector);
@@ -62,6 +68,7 @@ async function bootstrap() {
         defaultVersion: ["1", "2"],
     });
 
-    await app.listen(configService.get<string>("PORT"));
+    await app.listen(configService.get<string>("PORT"), '0.0.0.0');
+    // await app.listen(3000, '0.0.0.0');
 }
 bootstrap();

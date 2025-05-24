@@ -34,6 +34,10 @@ export class CreateUserDto {
     @MinLength(6, { message: "Password phải có ít nhất 6 ký tự" })
     password: string;
 
+    @IsNotEmpty({ message: "Department không được để trống" })
+    @IsMongoId({ message: "Department là định dạng mongo id" })
+    department: string;
+
     @IsNumber({}, { message: "Age phải là số" })
     @IsNotEmpty({ message: "Age không được để trống" })
     @Transform(({ value }) => parseInt(value))

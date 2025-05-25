@@ -6,17 +6,19 @@ import {
     Patch,
     Param,
     Delete,
-    UseGuards,
     Query,
     UploadedFile,
     UseInterceptors,
+    Res,
 } from "@nestjs/common";
+import { Response } from "express";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { Public, ResponseMessage, User } from "src/decorator/customize";
 import { IUser } from "./users.interface";
 import { FileInterceptor } from "@nestjs/platform-express";
+import * as path from "path";
 
 @Controller("users")
 export class UsersController {
@@ -43,11 +45,11 @@ export class UsersController {
         return this.usersService.findAll(+currentPage, +limit, qs);
     }
 
-    @Get(":id")
-    @ResponseMessage("Fetch user by id")
-    async findOne(@Param("id") id: string) {
-        return await this.usersService.findOne(id);
-    }
+    // @Get(":id")
+    // @ResponseMessage("Fetch user by id")
+    // async findOne(@Param("id") id: string) {
+    //     return await this.usersService.findOne(id);
+    // }
 
     @Patch(":id")
     @ResponseMessage("Update a User")
@@ -73,5 +75,13 @@ export class UsersController {
     @ResponseMessage("Get my profile")
     async getProfile(@User() user: IUser) {
         return await this.usersService.findOne(user._id);
+    }
+
+    @Get('faces/:id')
+    @ResponseMessage('Get my faces')
+    async getMyFace(@Param("id") id: string, @Res() res: Response) {
+        const getImage = await this.usersService.findOne(id) as any;
+        const imagePath = path.join(__dirname, '../../face-stored', `${getImage.image}`);
+        return res.sendFile(imagePath);
     }
 }

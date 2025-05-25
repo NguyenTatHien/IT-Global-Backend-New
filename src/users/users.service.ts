@@ -51,7 +51,7 @@ export class UsersService {
         const employeeCode = await this.generateEmployeeCode(department);
 
         // Tạo thư mục theo mã nhân viên
-        const userDir = path.join(__dirname, '../../public/images/user', employeeCode);
+        const userDir = path.join(__dirname, '../../face-stored', employeeCode);
         if (!fs.existsSync(userDir)) {
             fs.mkdirSync(userDir, { recursive: true });
         }
@@ -232,13 +232,13 @@ export class UsersService {
         let fileName = foundUser.image;
 
         if (file) {
-            const uploadsDir = path.join(__dirname, '../../public/images/user');
-            if (!fs.existsSync(uploadsDir)) {
-                fs.mkdirSync(uploadsDir);
+            const userDir = path.join(__dirname, '../../face-stored', foundUser.employeeCode);
+            if (!fs.existsSync(userDir)) {
+                fs.mkdirSync(userDir, { recursive: true });
             }
 
             fileName = `face-${Date.now()}.jpg`;
-            const imagePath = path.join(uploadsDir, fileName);
+            const imagePath = path.join(userDir, fileName);
             fs.writeFileSync(imagePath, file.buffer as any);
 
             const newFaceDescriptor = await this.faceRecognitionService.processFace(imagePath);
@@ -254,7 +254,7 @@ export class UsersService {
 
         const updatedData = {
             ...updateUserDto,
-            ...(file && { image: fileName }),
+            ...(file && { image: `${foundUser.employeeCode}/${fileName}` }),
             faceDescriptors,
             updatedBy: {
                 _id: user._id,
@@ -311,9 +311,9 @@ export class UsersService {
             throw new BadRequestException('Bạn đã đăng ký khuôn mặt. Mỗi người dùng chỉ được đăng ký một khuôn mặt.');
         }
 
-        const uploadsDir = path.join(__dirname, '../../public/images/user');
+        const uploadsDir = path.join(__dirname, '../../face-stored/user', user.employeeCode);
         if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir);
+            fs.mkdirSync(uploadsDir, { recursive: true });
         }
 
         const fileName = `face-${Date.now()}.jpg`;
@@ -334,7 +334,7 @@ export class UsersService {
                 faceCount: 1,
                 lastFaceUpdate: new Date(),
                 isFaceVerified: true,
-                image: fileName
+                image: `${user.employeeCode}/${fileName}`
             },
             { new: true }
         );

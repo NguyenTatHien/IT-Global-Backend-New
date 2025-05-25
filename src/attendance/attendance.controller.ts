@@ -104,8 +104,18 @@ export class AttendanceController {
         }
     }
 
+    @Get('all-attendance')
+    @ResponseMessage('Lấy lịch sử chấm công thành công')
+    findAll(
+        @Query("current") currentPage: string,
+        @Query("pageSize") limit: string,
+        @Query() qs: string,
+    ) {
+        return this.attendanceService.findAll(+currentPage, +limit, qs);
+    }
+
     @Get('my-attendance')
-    @ResponseMessage('Lấy lịch sử điểm danh thành công')
+    @ResponseMessage('Lấy lịch sử chấm công của tôi thành công')
     async getMyAttendance(
         @Req() req,
         @Query('current') current: number = 1,

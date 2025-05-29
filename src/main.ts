@@ -13,8 +13,8 @@ require("dotenv").config();
 
 async function bootstrap() {
     const httpsOptions = {
-        key: fs.readFileSync('./localhost+1-key.pem'),
-        cert: fs.readFileSync('./localhost+1.pem'),
+        key: fs.readFileSync('./SSL/localhost+1-key.pem'),
+        cert: fs.readFileSync('./SSL/localhost+1.pem'),
     }
     const app = await NestFactory.create<NestExpressApplication>(AppModule, {
         httpsOptions

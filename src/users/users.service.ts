@@ -57,7 +57,7 @@ export class UsersService {
         }
 
         // Lưu file ảnh vào thư mục đó
-        const fileName = `face.jpg`; // hoặc `${Date.now()}.jpg` nếu muốn nhiều ảnh
+        const fileName = `face${Date.now()}.jpg`; // hoặc `${Date.now()}.jpg` nếu muốn nhiều ảnh
         const imagePath = path.join(userDir, fileName);
         fs.writeFileSync(imagePath, file.buffer as any);
 
@@ -204,6 +204,14 @@ export class UsersService {
             .select("-faceDescriptors")
             .populate({ path: "role", select: { name: 1, _id: 1 } })
             .populate({ path: "department", select: { name: 1, _id: 1 } });
+    }
+
+    async getUserFaceData(id: string) {
+        return await this.userModel
+            .findOne({
+                _id: id,
+            })
+            .select("faceDescriptors")
     }
 
     async findOneByUsername(username: string) {

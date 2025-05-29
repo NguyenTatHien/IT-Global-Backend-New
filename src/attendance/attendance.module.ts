@@ -6,6 +6,8 @@ import { Attendance, AttendanceSchema } from './schemas/attendance.schema';
 import { UserShiftsModule } from '../user-shifts/user-shifts.module';
 import { CompaniesService } from 'src/companies/companies.service';
 import { CompaniesModule } from 'src/companies/companies.module';
+import { FaceRecognitionModule } from 'src/face-recognition/face-recognition.module';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
     imports: [
@@ -13,7 +15,9 @@ import { CompaniesModule } from 'src/companies/companies.module';
             { name: Attendance.name, schema: AttendanceSchema }
         ]),
         UserShiftsModule,
-        CompaniesModule
+        CompaniesModule,
+        FaceRecognitionModule,
+        UsersModule
     ],
     controllers: [AttendanceController],
     providers: [AttendanceService],

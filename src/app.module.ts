@@ -48,8 +48,8 @@ import { CompaniesModule } from './companies/companies.module';
         }),
         ThrottlerModule.forRoot([
             {
-            ttl: 60,
-                limit: 5,
+                ttl: 30,
+                limit: 100,
             },
         ]),
         CacheModule.register({

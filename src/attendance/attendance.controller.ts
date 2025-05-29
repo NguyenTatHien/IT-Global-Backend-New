@@ -1,20 +1,24 @@
 // BE-Test/src/attendance/attendance.controller.ts
-import { Controller, Get, Post, Req, UseGuards, Query, HttpStatus, HttpException } from '@nestjs/common';
+import { Controller, Get, Post, Req, UseGuards, Query, HttpStatus, HttpException, Body, UseInterceptors, UploadedFile, Res, Param } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AttendanceService } from './attendance.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags } from '@nestjs/swagger';
 import { Public, ResponseMessage } from '../decorator/customize';
 import { CompaniesService } from 'src/companies/companies.service';
-
+import { Response } from 'express';
 @ApiTags('attendance')
 @Controller('attendance')
-@UseGuards(JwtAuthGuard)
 export class AttendanceController {
     constructor(private readonly attendanceService: AttendanceService, private readonly companiesService: CompaniesService) { }
 
     @Post('check-in')
+    @UseInterceptors(FileInterceptor('image'))
     @ResponseMessage('Điểm danh thành công')
-    async checkIn(@Req() req) {
+    async checkIn(
+        @Req() req,
+        @Body() body: { location: { latitude: number; longitude: number } },
+        @UploadedFile() file: Express.Multer.File
+    ) {
         try {
             if (!req.user?._id) {
                 throw new Error('Không tìm thấy thông tin người dùng');
@@ -24,9 +28,9 @@ export class AttendanceController {
                 throw new Error('Vị trí không được để trống');
             }
 
-            if (!req.body.location.latitude || !req.body.location.longitude) {
-                throw new Error('Vị trí không được để trống');
-            }
+            // if (!req.body.location.latitude || !req.body.location.longitude) {
+            //     throw new Error('Vị trí không được để trống');
+            // }
 
             const ip = this.attendanceService.getClientIp(req);
             const company = await this.companiesService.getCompanyByIpAddress(ip);
@@ -40,8 +44,9 @@ export class AttendanceController {
 
             const result = await this.attendanceService.checkIn(
                 req.user._id,
-                req.body.location,
+                body.location,
                 ip,
+                file
             );
 
             return {
@@ -71,14 +76,18 @@ export class AttendanceController {
     }
 
     @Post('check-out')
+    @UseInterceptors(FileInterceptor('image'))
     @ResponseMessage('Kết thúc điểm danh thành công')
-    async checkOut(@Req() req) {
+    async checkOut(
+        @Req() req,
+        @UploadedFile() file: Express.Multer.File
+    ) {
         try {
             if (!req.user?._id) {
                 throw new Error('Không tìm thấy thông tin người dùng');
             }
 
-            const result = await this.attendanceService.checkOut(req.user._id);
+            const result = await this.attendanceService.checkOut(req.user._id, file);
 
             return {
                 statusCode: HttpStatus.OK,
@@ -107,11 +116,11 @@ export class AttendanceController {
     @Get('all-attendance')
     @ResponseMessage('Lấy lịch sử chấm công thành công')
     findAll(
-        @Query("current") currentPage: string,
-        @Query("pageSize") limit: string,
+        @Query("current") current: number = 1,
+        @Query("pageSize") pageSize: number = 10,
         @Query() qs: string,
     ) {
-        return this.attendanceService.findAll(+currentPage, +limit, qs);
+        return this.attendanceService.findAll(+current, +pageSize, qs);
     }
 
     @Get('my-attendance')
@@ -193,5 +202,19 @@ export class AttendanceController {
             clientIp,
             isInCompany
         };
+    }
+
+    @Get('check-in-image/:id')
+    @ResponseMessage('Lấy ảnh check-in thành công')
+    async getCheckInImage(@Param('id') id: string, @Res() res: Response) {
+        const getAttendanceImage = await this.attendanceService.getCheckInImage(id);
+        return res.sendFile(getAttendanceImage);
+    }
+
+    @Get('check-out-image/:id')
+    @ResponseMessage('Lấy ảnh check-out thành công')
+    async getCheckOutImage(@Param('id') id: string, @Res() res: Response) {
+        const getAttendanceImage = await this.attendanceService.getCheckOutImage(id);
+        return res.sendFile(getAttendanceImage);
     }
 }

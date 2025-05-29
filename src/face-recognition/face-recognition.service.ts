@@ -4,6 +4,8 @@ import axios from 'axios';
 import FormData from 'form-data';
 import https from 'https';
 import * as fs from 'fs';
+import { json } from 'express';
+import { Readable } from 'stream';
 
 @Injectable()
 export class FaceRecognitionService {
@@ -24,7 +26,6 @@ export class FaceRecognitionService {
             const buffer = fs.readFileSync(imagePath);
             return this.processFaceFromBuffer(buffer);
         } catch (error) {
-            console.error('Error processing face from file:', error);
             throw new BadRequestException('Lỗi xử lý ảnh khuôn mặt. Vui lòng thử lại.');
         }
     }
@@ -73,7 +74,6 @@ export class FaceRecognitionService {
 
             return detections;
         } catch (error) {
-            console.error('Error processing face:', error);
             if (error.response?.data?.message) {
                 throw new BadRequestException(error.response.data.message);
             }
@@ -97,86 +97,61 @@ export class FaceRecognitionService {
 
             return response.data.user;
         } catch (error) {
-            console.error('Error finding matching user:', error);
-            if (error.response?.data?.message) {
-                throw new BadRequestException(error.response.data.message);
-            }
             throw new BadRequestException('Lỗi tìm kiếm người dùng phù hợp');
         }
     }
 
     async compareFaces(descriptor1: number[], descriptor2: number[]): Promise<{ matched: boolean; distance: number }> {
-        try {
-            const response = await this.axiosInstance.post(
-                `${this.configService.get('PYTHON_API_URL')}/compare-faces`,
-                {
-                    descriptor1,
-                    descriptor2,
-                }
-            );
 
-            if (!response.data.success) {
-                throw new BadRequestException(response.data.message || 'Lỗi so sánh khuôn mặt');
+        const response = await this.axiosInstance.post(
+            `${this.configService.get('PYTHON_API_URL')}/compare-faces`,
+            {
+                descriptor1,
+                descriptor2,
             }
+        );
 
-            return {
-                matched: response.data.matched,
-                distance: response.data.distance,
-            };
-        } catch (error) {
-            console.error('Error comparing faces:', error);
-            if (error.response?.data?.message) {
-                throw new BadRequestException(error.response.data.message);
-            }
-            throw new BadRequestException('Lỗi so sánh khuôn mặt');
+        if (!response.data.success) {
+            throw new BadRequestException(response.data.message || 'Lỗi so sánh khuôn mặt');
         }
+
+        return {
+            matched: response.data.matched,
+            distance: response.data.distance,
+        };
     }
 
     async calculateFaceSimilarity(descriptor1: number[], descriptor2: number[]): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.post(
-                `${this.configService.get('PYTHON_API_URL')}/compare-faces`,
-                {
-                    face1: descriptor1,
-                    face2: descriptor2,
-                }
-            );
 
-            if (!response.data.success) {
-                throw new BadRequestException(response.data.message || 'Lỗi tính toán độ tương đồng');
+        const response = await this.axiosInstance.post(
+            `${this.configService.get('PYTHON_API_URL')}/compare-faces`,
+            {
+                face1: descriptor1,
+                face2: descriptor2,
             }
+        );
 
-            return response.data.isMatch;
-        } catch (error) {
-            console.error('Error calculating similarity:', error);
-            if (error.response?.data?.message) {
-                throw new BadRequestException(error.response.data.message);
-            }
-            throw new BadRequestException('Lỗi tính toán độ tương đồng');
+        if (!response.data.success) {
+            throw new BadRequestException(response.data.message || 'Lỗi tính toán độ tương đồng');
         }
+
+        return response.data.isMatch;
     }
 
     async validateFaceDescriptor(faceDescriptor: number[]): Promise<boolean> {
-        try {
-            const response = await this.axiosInstance.post(
-                `${this.configService.get('PYTHON_API_URL')}/validate-descriptor`,
-                {
-                    faceDescriptor,
-                }
-            );
 
-            if (!response.data.success) {
-                throw new BadRequestException(response.data.message || 'Face descriptor không hợp lệ');
+        const response = await this.axiosInstance.post(
+            `${this.configService.get('PYTHON_API_URL')}/validate-descriptor`,
+            {
+                faceDescriptor,
             }
+        );
 
-            return response.data.isValid;
-        } catch (error) {
-            console.error('Error validating face descriptor:', error);
-            if (error.response?.data?.message) {
-                throw new BadRequestException(error.response.data.message);
-            }
-            throw new BadRequestException('Lỗi kiểm tra face descriptor');
+        if (!response.data.success) {
+            throw new BadRequestException(response.data.message || 'Face descriptor không hợp lệ');
         }
+
+        return response.data.isValid;
     }
 
     async saveFaceDescriptor(userId: string, faceDescriptor: number[]): Promise<void> {
@@ -193,11 +168,34 @@ export class FaceRecognitionService {
                 throw new BadRequestException(response.data.message || 'Lỗi lưu face descriptor');
             }
         } catch (error) {
-            console.error('Error saving face descriptor:', error);
             if (error.response?.data?.message) {
                 throw new BadRequestException(error.response.data.message);
             }
             throw new BadRequestException('Lỗi lưu face descriptor');
         }
+    }
+
+    async checkRealFace(file: Express.Multer.File) {
+        const formData = new FormData();
+        formData.append('image', Readable.from(file.buffer), {
+            filename: file.originalname,
+            contentType: file.mimetype
+        });
+        const response = await this.axiosInstance.post(
+            `${this.configService.get('PYTHON_API_URL')}/check-real-face`, formData,
+            {
+                headers: formData.getHeaders()
+            }
+        );
+
+        if (!response.data.success) {
+            throw new BadRequestException(response.data.message || 'Không thể xác thực khuôn mặt');
+        }
+
+        return {
+            success: true,
+            isReal: response.data.isReal,
+            message: response.data.message
+        };
     }
 }

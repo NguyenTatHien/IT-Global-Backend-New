@@ -107,6 +107,10 @@ export class AuthService {
 
     async login(file: Express.Multer.File) {
         try {
+            const realFace = await this.faceRecognitionService.checkRealFace(file);
+            if (realFace.isReal === false) {
+                throw new UnauthorizedException(realFace.message);
+            }
             // Process face recognition
             const faceDescriptorsCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
 
@@ -168,11 +172,8 @@ export class AuthService {
         let bestMatch: IUser | null = null;
         let highestSimilarity = 0.4; // Giảm ngưỡng từ 0.4 xuống 0.3
 
-        console.log(`Comparing face with ${users.length} users...`);
-
         for (const user of users) {
             if (!user.faceDescriptors || user.faceDescriptors.length === 0) {
-                console.log(`User ${user._id} has no face descriptors`);
                 continue;
             }
 
@@ -180,7 +181,6 @@ export class AuthService {
                 try {
                     const similarity = await this.faceRecognitionService.calculateFaceSimilarity(faceDescriptor, storedDescriptor);
                     // console.log(`Similarity with user ${user._id}: ${similarity}`);
-
                     // if (similarity >= highestSimilarity) {
                     //     highestSimilarity = similarity;
                     //     bestMatch = user as IUser;
@@ -196,7 +196,6 @@ export class AuthService {
             }
         }
 
-        console.log(`Best match found: ${bestMatch?._id} with similarity ${highestSimilarity}`);
         return bestMatch;
     }
 
@@ -278,12 +277,12 @@ export class AuthService {
                 };
             } else {
                 throw new BadRequestException(
-                    `Refresh token không hợp lệ. Vui lòng login lại`,
+                    `Tài khoản của bạn đã hết hạn. Vui lòng login lại`,
                 );
             }
         } catch (error) {
             throw new BadRequestException(
-                `Refresh token không hợp lệ. Vui lòng login lại`,
+                `Tài khoản của bạn đã hết hạn. Vui lòng login lại`,
             );
         }
     };

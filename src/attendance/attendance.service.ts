@@ -220,7 +220,7 @@ export class AttendanceService {
     }
 
     async findAll(currentPage: number, limit: number, query: any) {
-        // Filter theo tháng
+        // Filter theo ngày
         const filter: any = {};
         if (query.startDate && query.endDate) {
             filter.checkInTime = {
@@ -232,76 +232,93 @@ export class AttendanceService {
         let offset = (+currentPage - 1) * +limit;
         let defaultLimit = +limit ? +limit : 10;
 
-        // Nếu có search theo tên nhân viên
-        if (query.search) {
-            // Dùng aggregate để join sang User và filter theo tên
-            const match: any = { ...filter };
-            const searchRegex = new RegExp(query.search, 'i');
-            const pipeline: any[] = [
-                { $match: match },
-                {
-                    $lookup: {
-                        from: 'users',
-                        localField: 'userId',
-                        foreignField: '_id',
-                        as: 'user'
-                    }
-                },
-                { $unwind: '$user' },
-                { $match: { 'user.name': searchRegex } },
-                { $sort: { checkInTime: -1 } },
-                { $skip: offset },
-                { $limit: defaultLimit }
-            ];
-            const result = await this.attendanceModel.aggregate(pipeline);
-            // Đếm tổng số bản ghi phù hợp
-            const totalItemsAgg = await this.attendanceModel.aggregate([
-                { $match: match },
-                {
-                    $lookup: {
-                        from: 'users',
-                        localField: 'userId',
-                        foreignField: '_id',
-                        as: 'user'
-                    }
-                },
-                { $unwind: '$user' },
-                { $match: { 'user.name': searchRegex } },
-                { $count: 'count' }
-            ]);
-            const totalItems = totalItemsAgg[0]?.count || 0;
-            const totalPages = Math.ceil(totalItems / defaultLimit);
-            return {
-                meta: {
-                    current: currentPage,
-                    pageSize: limit,
-                    pages: totalPages,
-                    total: totalItems,
-                },
-                result,
-            };
-        } else {
-            // Không search, chỉ filter theo tháng
-            const totalItems = await this.attendanceModel.countDocuments(filter);
-            const totalPages = Math.ceil(totalItems / defaultLimit);
-            const result = await this.attendanceModel
-                .find(filter)
-                .skip(offset)
-                .limit(defaultLimit)
-                .sort({ checkInTime: -1 })
-                .populate({ path: 'userId', select: { name: 1, _id: 1, employeeCode: 1 } })
-                .populate({ path: 'userShiftId', select: { name: 1, _id: 1 } })
-                .exec();
-            return {
-                meta: {
-                    current: currentPage,
-                    pageSize: limit,
-                    pages: totalPages,
-                    total: totalItems,
-                },
-                result,
-            };
+        // Dùng aggregate để join sang User và filter động
+        const pipeline: any[] = [
+            { $match: filter },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'userId',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            { $unwind: '$user' }
+        ];
+
+        // Filter theo mã nhân viên
+        if (query.employeeCode) {
+            pipeline.push({
+                $match: { 'user.employeeCode': { $regex: query.employeeCode, $options: 'i' } }
+            });
         }
+        // Filter theo tên nhân viên
+        if (query.userName) {
+            pipeline.push({
+                $match: { 'user.name': { $regex: query.userName, $options: 'i' } }
+            });
+        }
+        // Filter theo các trường khác nếu cần
+        // ...
+
+        // Sắp xếp, phân trang
+        pipeline.push(
+            { $sort: { checkInTime: -1 } },
+            { $skip: offset },
+            { $limit: defaultLimit }
+        );
+
+        const result = await this.attendanceModel.aggregate(pipeline);
+
+        // Map lại dữ liệu để FE nhận đúng các trường, loại bỏ dữ liệu khuôn mặt nếu có
+        const mappedResult = result.map(item => {
+            // Xóa trường dữ liệu khuôn mặt nếu có
+            if (item.user && item.user.faceDescriptors) delete item.user.faceDescriptors;
+            if (item.user && item.user.faceData) delete item.user.faceData;
+            return {
+                _id: item._id,
+                userId: item.user ? {
+                    _id: item.user._id,
+                    name: item.user.name,
+                    employeeCode: item.user.employeeCode
+                } : '',
+                userShiftId: item.userShiftId || '',
+                checkInTime: item.checkInTime,
+                checkOutTime: item.checkOutTime,
+                status: item.status,
+                totalHours: item.totalHours,
+                overtimeHours: item.overtimeHours,
+                lateMinutes: item.lateMinutes,
+                earlyMinutes: item.earlyMinutes,
+                location: item.location,
+                ipAddress: item.ipAddress,
+                checkInImage: item.checkInImage,
+                checkOutImage: item.checkOutImage,
+                isDeleted: item.isDeleted,
+                deletedAt: item.deletedAt,
+                updatedBy: item.updatedBy,
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+                __v: item.__v
+            };
+        });
+
+        // Đếm tổng số bản ghi phù hợp
+        const countPipeline = pipeline.slice(0, -3); // Bỏ sort, skip, limit
+        countPipeline.push({ $count: 'count' });
+        const totalItemsAgg = await this.attendanceModel.aggregate(countPipeline);
+        const totalItems = totalItemsAgg[0]?.count || 0;
+        const totalPages = Math.ceil(totalItems / defaultLimit);
+
+        return {
+            meta: {
+                current: currentPage,
+                pageSize: limit,
+                pages: totalPages,
+                total: totalItems,
+            },
+            result: mappedResult,
+        };
     }
 
     async getMyAttendance(
@@ -345,65 +362,63 @@ export class AttendanceService {
                 sortObj = { [sortField]: sortOrder };
             }
             const skip = (current - 1) * pageSize;
-            const [data, total] = await Promise.all([
-                this.attendanceModel
-                    .find(mongoQuery)
-                    .populate({ path: 'userId', select: { name: 1, _id: 1, employeeCode: 1 } })
-                    .populate({ path: 'userShiftId', select: { name: 1, _id: 1 } })
-                    .sort(sortObj)
-                    .skip(skip)
-                    .limit(pageSize)
-                    .lean()
-                    .exec(),
-                this.attendanceModel.countDocuments(mongoQuery)
-            ]);
+            const result = await this.attendanceModel
+                .find(mongoQuery)
+                .populate({ path: 'userId', select: { name: 1, _id: 1, employeeCode: 1 } })
+                .populate({ path: 'userShiftId', select: { name: 1, _id: 1 } })
+                .sort(sortObj)
+                .skip(skip)
+                .limit(pageSize)
+                .lean()
+                .exec();
+            const total = await this.attendanceModel.countDocuments(mongoQuery);
 
             // Transform data to include formatted dates
-            const transformedData = data.map(item => {
-                const attendance: ITransformedAttendance = {
-                    _id: item._id.toString(),
-                    userId: (typeof item.userId === 'object' && item.userId !== null && 'name' in item.userId)
-                        ? {
-                            _id: ((item.userId as any)._id?.toString?.() || (item.userId as any)._id || item.userId.toString()),
-                            name: String((item.userId as any).name || '')
-                        }
-                        : { _id: item.userId?.toString?.() || item.userId, name: '' },
-                    checkInTime: new Date(item.checkInTime).toISOString(),
-                    checkOutTime: item.checkOutTime ? new Date(item.checkOutTime).toISOString() : null,
-                    status: item.status,
-                    totalHours: Number(item.totalHours || 0).toFixed(2),
-                    overtimeHours: Number(item.overtimeHours || 0),
-                    lateMinutes: Number(item.lateMinutes || 0),
-                    earlyMinutes: Number(item.earlyMinutes || 0),
-                    isDeleted: item.isDeleted || false,
-                    deletedAt: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
-                    updatedBy: item.updatedBy || '',
-                    createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString(),
-                    updatedAt: item.updatedAt ? new Date(item.updatedAt).toISOString() : new Date().toISOString(),
-                    __v: item.__v || 0,
-                    userShiftId: (item.userShiftId != null && typeof item.userShiftId === 'object' && 'name')
-                        ? {
-                            _id: ((item.userShiftId as any)._id?.toString?.() || (item.userShiftId as any)._id || String(item.userShiftId)),
-                            name: String((item.userShiftId as any).name || '')
-                        }
-                        : { _id: item.userShiftId ? String(item.userShiftId) : '', name: '' },
-                };
+            // const transformedData = data.map(item => {
+            //     const attendance: ITransformedAttendance = {
+            //         _id: item._id.toString(),
+            //         userId: (typeof item.userId === 'object' && item.userId !== null && 'name' in item.userId)
+            //             ? {
+            //                 _id: ((item.userId as any)._id?.toString?.() || (item.userId as any)._id || item.userId.toString()),
+            //                 name: String((item.userId as any).name || '')
+            //             }
+            //             : { _id: item.userId?.toString?.() || item.userId, name: '' },
+            //         checkInTime: new Date(item.checkInTime).toISOString(),
+            //         checkOutTime: item.checkOutTime ? new Date(item.checkOutTime).toISOString() : null,
+            //         status: item.status,
+            //         totalHours: Number(item.totalHours || 0).toFixed(2),
+            //         overtimeHours: Number(item.overtimeHours || 0),
+            //         lateMinutes: Number(item.lateMinutes || 0),
+            //         earlyMinutes: Number(item.earlyMinutes || 0),
+            //         isDeleted: item.isDeleted || false,
+            //         deletedAt: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
+            //         updatedBy: item.updatedBy || '',
+            //         createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString(),
+            //         updatedAt: item.updatedAt ? new Date(item.updatedAt).toISOString() : new Date().toISOString(),
+            //         __v: item.__v || 0,
+            //         userShiftId: (item.userShiftId != null && typeof item.userShiftId === 'object' && 'name')
+            //             ? {
+            //                 _id: ((item.userShiftId as any)._id?.toString?.() || (item.userShiftId as any)._id || String(item.userShiftId)),
+            //                 name: String((item.userShiftId as any).name || '')
+            //             }
+            //             : { _id: item.userShiftId ? String(item.userShiftId) : '', name: '' },
+            //     };
 
-                // Handle userShiftId population
-                if (item.userShiftId != null && typeof item.userShiftId === 'object') {
-                    const userShift = item.userShiftId as any;
-                    if (userShift.shiftId) {
-                        attendance.userShiftId = {
-                            _id: userShift._id.toString(),
-                            name: userShift.shiftId.name,
-                            startTime: userShift.shiftId.startTime,
-                            endTime: userShift.shiftId.endTime
-                        };
-                    }
-                }
+            //     // Handle userShiftId population
+            //     if (item.userShiftId != null && typeof item.userShiftId === 'object') {
+            //         const userShift = item.userShiftId as any;
+            //         if (userShift.shiftId) {
+            //             attendance.userShiftId = {
+            //                 _id: userShift._id.toString(),
+            //                 name: userShift.shiftId.name,
+            //                 startTime: userShift.shiftId.startTime,
+            //                 endTime: userShift.shiftId.endTime
+            //             };
+            //         }
+            //     }
 
-                return attendance;
-            });
+            //     return attendance;
+            // });
             return {
                 meta: {
                     current: Number(current),
@@ -411,7 +426,7 @@ export class AttendanceService {
                     total: Number(total),
                     pages: Math.ceil(total / pageSize)
                 },
-                result: transformedData
+                result,
             };
         } catch (error) {
             throw error;

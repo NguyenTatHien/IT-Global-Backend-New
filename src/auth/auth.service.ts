@@ -186,7 +186,7 @@ export class AuthService {
                     //     bestMatch = user as IUser;
                     // }
 
-                    if (similarity === true) {
+                    if ((similarity as any).isMatch === true) {
                         // highestSimilarity = similarity;
                         bestMatch = user as IUser;
                     }

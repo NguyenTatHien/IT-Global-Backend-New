@@ -64,7 +64,7 @@ export class AttendanceService {
 
         const findFace = await this.faceRecognitionService.calculateFaceSimilarity(faceResult, user.faceDescriptors as any);
         if (findFace === false) {
-            throw new Error('Xác thực khuôn mặt thất bại');
+            throw new Error('Vui lòng sử dụng đúng khuôn mặt của bạn');
         }
 
         // 1. Lấy ca làm việc hôm đó
@@ -433,7 +433,7 @@ export class AttendanceService {
         }
     }
 
-    async getTodayAttendance(userId: string) {
+    async getTodayAttendance(userId: Types.ObjectId | string) {
 
         const today = new Date();
         const startOfDay = new Date(today);

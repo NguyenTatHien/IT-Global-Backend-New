@@ -166,7 +166,6 @@ export class AttendanceController {
             }
 
             const attendance = await this.attendanceService.getTodayAttendance(req.user._id);
-
             return {
                 statusCode: HttpStatus.OK,
                 message: 'Lấy thông tin điểm danh thành công',

@@ -21,13 +21,13 @@ import { CacheInterceptor } from '@nestjs/cache-manager';
 import { ShiftsModule } from './shifts/shifts.module';
 import { UserShiftsModule } from './user-shifts/user-shifts.module';
 import { AttendanceModule } from './attendance/attendance.module';
-import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
-import { PayrollModule } from './payroll/payroll.module';
 import { ReportsModule } from './reports/reports.module';
 import { SystemConfigsModule } from './system-configs/system-configs.module';
 import { SystemLogsModule } from './system-logs/system-logs.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { CompaniesModule } from './companies/companies.module';
+import { RequestsModule } from "./requests/requests.module";
+import { SalaryModule } from './salary/salary.module';
 
 @Module({
     imports: [
@@ -69,13 +69,13 @@ import { CompaniesModule } from './companies/companies.module';
         ShiftsModule,
         UserShiftsModule,
         AttendanceModule,
-        LeaveRequestsModule,
-        PayrollModule,
         ReportsModule,
         SystemConfigsModule,
         SystemLogsModule,
         DepartmentsModule,
-        CompaniesModule
+        CompaniesModule,
+        RequestsModule,
+        SalaryModule,
     ],
     controllers: [AppController],
     providers: [

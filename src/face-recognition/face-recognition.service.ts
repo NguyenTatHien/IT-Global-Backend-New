@@ -135,45 +135,45 @@ export class FaceRecognitionService {
             throw new BadRequestException(response.data.message || 'Lỗi tính toán độ tương đồng');
         }
 
-        return response.data.isMatch;
+        return response.data;
     }
 
-    async validateFaceDescriptor(faceDescriptor: number[]): Promise<boolean> {
+    // async validateFaceDescriptor(faceDescriptor: number[]): Promise<boolean> {
 
-        const response = await this.axiosInstance.post(
-            `${this.configService.get('PYTHON_API_URL')}/validate-descriptor`,
-            {
-                faceDescriptor,
-            }
-        );
+    //     const response = await this.axiosInstance.post(
+    //         `${this.configService.get('PYTHON_API_URL')}/validate-descriptor`,
+    //         {
+    //             faceDescriptor,
+    //         }
+    //     );
 
-        if (!response.data.success) {
-            throw new BadRequestException(response.data.message || 'Face descriptor không hợp lệ');
-        }
+    //     if (!response.data.success) {
+    //         throw new BadRequestException(response.data.message || 'Face descriptor không hợp lệ');
+    //     }
 
-        return response.data.isValid;
-    }
+    //     return response.data.isValid;
+    // }
 
-    async saveFaceDescriptor(userId: string, faceDescriptor: number[]): Promise<void> {
-        try {
-            const response = await this.axiosInstance.post(
-                `${this.configService.get('PYTHON_API_URL')}/save-descriptor`,
-                {
-                    userId,
-                    faceDescriptor,
-                }
-            );
+    // async saveFaceDescriptor(userId: string, faceDescriptor: number[]): Promise<void> {
+    //     try {
+    //         const response = await this.axiosInstance.post(
+    //             `${this.configService.get('PYTHON_API_URL')}/save-descriptor`,
+    //             {
+    //                 userId,
+    //                 faceDescriptor,
+    //             }
+    //         );
 
-            if (!response.data.success) {
-                throw new BadRequestException(response.data.message || 'Lỗi lưu face descriptor');
-            }
-        } catch (error) {
-            if (error.response?.data?.message) {
-                throw new BadRequestException(error.response.data.message);
-            }
-            throw new BadRequestException('Lỗi lưu face descriptor');
-        }
-    }
+    //         if (!response.data.success) {
+    //             throw new BadRequestException(response.data.message || 'Lỗi lưu face descriptor');
+    //         }
+    //     } catch (error) {
+    //         if (error.response?.data?.message) {
+    //             throw new BadRequestException(error.response.data.message);
+    //         }
+    //         throw new BadRequestException('Lỗi lưu face descriptor');
+    //     }
+    // }
 
     async checkRealFace(file: Express.Multer.File) {
         const formData = new FormData();

@@ -120,13 +120,14 @@ export class UsersService {
         const userRole = await this.roleModel.findOne({ name: USER_ROLE });
         const hashPassword = this.getHashPassword(password);
 
-        const uploadsDir = path.join(__dirname, '../../public/images/user');
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir);
+        // Tạo thư mục riêng cho user trong face-stored
+        const userDir = path.join(__dirname, '../../face-stored', email);
+        if (!fs.existsSync(userDir)) {
+            fs.mkdirSync(userDir, { recursive: true });
         }
 
         const fileName = `face-${Date.now()}.jpg`;
-        const imagePath = path.join(uploadsDir, fileName);
+        const imagePath = path.join(userDir, fileName);
         fs.writeFileSync(imagePath, file.buffer as any);
 
         const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
@@ -140,7 +141,7 @@ export class UsersService {
             gender,
             address,
             role: userRole?._id,
-            image: fileName,
+            image: `${email}/${fileName}`,
             faceDescriptors: [faceDescriptor],
             faceCount: 1,
             lastFaceUpdate: new Date(),
@@ -180,6 +181,7 @@ export class UsersService {
             // @ts-ignore: Unreachable code error
             .sort(sort)
             .select("-password")
+            .select("-faceDescriptors")
             .populate(population)
             .exec();
 
@@ -240,6 +242,16 @@ export class UsersService {
         let fileName = foundUser.image;
 
         if (file) {
+            // const faceDescriptorsCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
+            // if (!faceDescriptorsCompare) {
+            //     throw new BadRequestException('Không phát hiện được khuôn mặt trong ảnh');
+            // }
+            // const similarity = await this.faceRecognitionService.calculateFaceSimilarity(faceDescriptors[0], faceDescriptorsCompare);
+            // console.log((similarity as any).distance);
+            // if ((similarity as any).distance > 0.5) {
+            //     throw new BadRequestException('Khuôn mặt đăng ký quá khác so với khuôn mặt đã đăng ký');
+            // }
+
             const userDir = path.join(__dirname, '../../face-stored', foundUser.employeeCode);
             if (!fs.existsSync(userDir)) {
                 fs.mkdirSync(userDir, { recursive: true });
@@ -253,11 +265,7 @@ export class UsersService {
             if (!newFaceDescriptor) {
                 throw new BadRequestException('Không phát hiện khuôn mặt trong ảnh tải lên');
             }
-
-            if (faceDescriptors.length >= 5) {
-                faceDescriptors = faceDescriptors.slice(1);
-            }
-            faceDescriptors.push(newFaceDescriptor);
+            faceDescriptors = [newFaceDescriptor];
         }
 
         const updatedData = {
@@ -359,14 +367,13 @@ export class UsersService {
                 throw new BadRequestException('Bạn đã đăng ký khuôn mặt. Mỗi người dùng chỉ được đăng ký một khuôn mặt.');
             }
 
-            const uploadDir = path.join(process.cwd(), 'public', 'images', 'users');
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, { recursive: true });
+            const userDir = path.join(__dirname, '../../face-stored', existingUser.email);
+            if (!fs.existsSync(userDir)) {
+                fs.mkdirSync(userDir, { recursive: true });
             }
 
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            const filename = `${userId}-${uniqueSuffix}${path.extname(file.originalname)}`;
-            const filePath = path.join(uploadDir, filename);
+            const fileName = `face-${Date.now()}.jpg`;
+            const filePath = path.join(userDir, fileName);
 
             await fs.promises.writeFile(filePath, file.buffer as any);
 
@@ -379,7 +386,7 @@ export class UsersService {
             const updatedUser = await this.userModel.findByIdAndUpdate(
                 userId,
                 {
-                    avatar: `/images/users/${filename}`,
+                    image: `${existingUser.employeeCode}/${fileName}`,
                     faceDescriptors: [faceDescriptor],
                     faceCount: 1,
                     lastFaceUpdate: new Date(),
@@ -392,7 +399,7 @@ export class UsersService {
                 throw new BadRequestException('User not found');
             }
 
-            return updatedUser.avatar;
+            return updatedUser.image;
         } catch (error) {
             console.error('Error processing image:', error);
             throw error;

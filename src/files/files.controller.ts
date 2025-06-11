@@ -57,6 +57,12 @@ export class FilesController {
         };
     }
 
+    @Public()
+    @Delete("delete")
+    deleteFile(@Body() body: { fileName: string }) {
+        return this.filesService.deleteFile(body.fileName);
+    }
+
     @Get()
     findAll() {
         return this.filesService.findAll();

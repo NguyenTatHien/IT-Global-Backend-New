@@ -81,7 +81,7 @@ export class UsersController {
     @ResponseMessage('Get my faces')
     async getMyFace(@Param("id") id: string, @Res() res: Response) {
         const getImage = await this.usersService.findOne(id) as any;
-        const imagePath = path.join(__dirname, '../../face-stored', `${getImage.image}`);
+        const imagePath = path.join(__dirname, '../../face-stored', getImage.image);
         return res.sendFile(imagePath);
     }
 }

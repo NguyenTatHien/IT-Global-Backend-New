@@ -145,19 +145,9 @@ export class AttendanceController {
                 { startDate, endDate, sort }
             );
 
-            return {
-                statusCode: HttpStatus.OK,
-                message: 'Lấy lịch sử điểm danh thành công',
-                data: {
-                    result: serviceResult.result,
-                    meta: {
-                        current: serviceResult.meta.current,
-                        pageSize: serviceResult.meta.pageSize,
-                        total: serviceResult.meta.total
-                    }
-                }
-            };
-        } catch (error) {
+            return serviceResult;
+        }
+        catch (error) {
             console.error('Get my attendance error:', error);
             throw new HttpException({
                 statusCode: HttpStatus.BAD_REQUEST,
@@ -176,7 +166,6 @@ export class AttendanceController {
             }
 
             const attendance = await this.attendanceService.getTodayAttendance(req.user._id);
-
             return {
                 statusCode: HttpStatus.OK,
                 message: 'Lấy thông tin điểm danh thành công',

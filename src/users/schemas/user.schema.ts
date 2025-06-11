@@ -89,6 +89,15 @@ export class User {
 
     @Prop({ default: 'official', enum: ['official', 'contract', 'intern'] })
     employeeType: string;
+
+    @Prop({ type: Number, default: 0 })
+    salary: number;
+
+    @Prop({ type: Number, default: 0 })
+    allowance: number;
+
+    @Prop({ type: Number, default: 0 })
+    bonus: number;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

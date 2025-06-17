@@ -6,8 +6,8 @@ export class UpdateRequestStatusDto {
     @IsEnum(RequestStatus)
     status: RequestStatus;
 
-    @IsNotEmpty()
-    @IsMongoId()
+    // @IsNotEmpty()
+    // @IsMongoId()
     approvedBy: string;
 
     @IsOptional()

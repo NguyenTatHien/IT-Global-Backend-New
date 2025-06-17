@@ -13,6 +13,7 @@ import path from 'path';
 import * as fs from 'fs';
 import { UsersService } from 'src/users/users.service';
 import { Types } from 'mongoose';
+import { RequestsService } from 'src/requests/requests.service';
 @Injectable()
 export class AttendanceService {
     constructor(
@@ -20,7 +21,8 @@ export class AttendanceService {
         private userShiftsService: UserShiftsService,
         private companiesService: CompaniesService,
         private faceRecognitionService: FaceRecognitionService,
-        private userService: UsersService
+        private userService: UsersService,
+        private requestsService: RequestsService
     ) { }
 
     // Hardcoded working hours
@@ -54,12 +56,12 @@ export class AttendanceService {
         }
         // Xác thực khuôn mặt
         const faceResult = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
-        // if (!faceResult) {
-        //     throw new Error('Xác thực khuôn mặt thất bại');
-        // }
+        if (!faceResult) {
+            throw new Error('Xác thực khuôn mặt thất bại');
+        }
         const user = await this.userService.getUserFaceData(userId);
         if (!user) {
-            throw new Error('Không tìm thấy thông tin user');
+            throw new Error('Không tìm thấy thông tin khuôn mặt user');
         }
 
         const findFace = await this.faceRecognitionService.calculateFaceSimilarity(faceResult, user.faceDescriptors as any);
@@ -152,10 +154,23 @@ export class AttendanceService {
                 throw new Error('Khuôn mặt không được để trống');
             }
 
+            const fakeFaceResult = await this.faceRecognitionService.checkRealFace(file);
+            if (fakeFaceResult.isReal === false) {
+                throw new Error('Vui lòng đưa mặt thật vào camera');
+            }
             // Xác thực khuôn mặt
             const faceResult = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
             if (!faceResult) {
                 throw new Error('Xác thực khuôn mặt thất bại');
+            }
+            const user = await this.userService.getUserFaceData(userId);
+            if (!user) {
+                throw new Error('Không tìm thấy thông tin user');
+            }
+
+            const findFace = await this.faceRecognitionService.calculateFaceSimilarity(faceResult, user.faceDescriptors as any);
+            if (findFace === false) {
+                throw new Error('Vui lòng sử dụng đúng khuôn mặt của bạn');
             }
 
             // 1. Lấy bản ghi check-in hôm nay

@@ -6,10 +6,15 @@ import { ApiTags } from '@nestjs/swagger';
 import { Public, ResponseMessage } from '../decorator/customize';
 import { CompaniesService } from 'src/companies/companies.service';
 import { Response } from 'express';
+import { RequestsService } from 'src/requests/requests.service';
 @ApiTags('attendance')
 @Controller('attendance')
 export class AttendanceController {
-    constructor(private readonly attendanceService: AttendanceService, private readonly companiesService: CompaniesService) { }
+    constructor(
+        private readonly attendanceService: AttendanceService,
+        private readonly companiesService: CompaniesService,
+        private readonly requestsService: RequestsService
+    ) { }
 
     @Post('check-in')
     @UseInterceptors(FileInterceptor('image'))
@@ -28,19 +33,23 @@ export class AttendanceController {
                 throw new Error('Vị trí không được để trống');
             }
 
-            // if (!req.body.location.latitude || !req.body.location.longitude) {
-            //     throw new Error('Vị trí không được để trống');
-            // }
-
             const ip = this.attendanceService.getClientIp(req);
-            const company = await this.companiesService.getCompanyByIpAddress(ip);
+            const companyIp = await this.companiesService.getCompanyByIpAddress(ip);
             if (!ip) {
                 throw new Error('IP không được để trống');
             }
 
-            if (!company) {
+            const hasApprovedRemoteWorkToday = await this.requestsService.hasApprovedRemoteWorkToday(req.user._id);
+
+            if (!companyIp && hasApprovedRemoteWorkToday === false) {
                 throw new Error('Địa chỉ IP không thuộc công ty bạn làm việc');
             }
+
+            const hasApprovedLeaveToday = await this.requestsService.hasApprovedLeaveToday(req.user._id);
+            if (hasApprovedLeaveToday === true) {
+                throw new Error('Bạn đã được duyệt nghỉ phép hôm nay');
+            }
+
 
             const result = await this.attendanceService.checkIn(
                 req.user._id,
@@ -80,11 +89,23 @@ export class AttendanceController {
     @ResponseMessage('Kết thúc điểm danh thành công')
     async checkOut(
         @Req() req,
+        @Body() body: { location: { latitude: number; longitude: number } },
         @UploadedFile() file: Express.Multer.File
     ) {
         try {
             if (!req.user?._id) {
                 throw new Error('Không tìm thấy thông tin người dùng');
+            }
+
+            const ip = this.attendanceService.getClientIp(req);
+            const companyIp = await this.companiesService.getCompanyByIpAddress(ip);
+            if (!ip) {
+                throw new Error('IP không được để trống');
+            }
+            const hasApprovedRemoteWorkToday = await this.requestsService.hasApprovedRemoteWorkToday(req.user._id);
+
+            if (!companyIp && hasApprovedRemoteWorkToday === false) {
+                throw new Error('Địa chỉ IP không thuộc công ty bạn làm việc');
             }
 
             const result = await this.attendanceService.checkOut(req.user._id, file);

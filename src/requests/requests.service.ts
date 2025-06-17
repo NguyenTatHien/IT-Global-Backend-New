@@ -65,17 +65,71 @@ export class RequestsService {
         return this.leaveRequestModel.findById(id);
     }
 
-    async updateLeaveRequestStatus(id: string, status: RequestStatus, approvedBy: string, rejectionReason?: string): Promise<LeaveRequest> {
+    async updateLeaveRequestStatus(id: string, status: RequestStatus, user: IUser, rejectionReason?: string): Promise<LeaveRequest> {
         return this.leaveRequestModel.findByIdAndUpdate(
             id,
             {
                 status,
-                approvedBy,
+                approvedBy: user._id,
                 approvedAt: new Date(),
                 ...(rejectionReason && { rejectionReason }),
             },
             { new: true },
         );
+    }
+
+    async findMyLeaveRequests(currentPage: number, limit: number, qs: string, user: IUser) {
+        const { filter, sort, population } = aqp(qs);
+        delete filter.current;
+        delete filter.pageSize;
+        filter.employee = user._id;
+
+        let offset = (+currentPage - 1) * +limit;
+        let defaultLimit = +limit ? +limit : 10;
+        const totalItems = (await this.leaveRequestModel.find(filter)).length;
+        const totalPages = Math.ceil(totalItems / defaultLimit);
+
+        const result = await this.leaveRequestModel
+            .find(filter)
+            .skip(offset)
+            .limit(defaultLimit)
+            // @ts-ignore: Unreachable code error
+            .sort(sort)
+            .populate({
+                path: "employee",
+                select: { name: 1, employeeCode: 1 }
+            })
+            .populate({
+                path: "approvedBy",
+                select: { name: 1 }
+            })
+            .exec();
+
+        return {
+            meta: {
+                current: currentPage, //trang hiện tại
+                pageSize: limit, //số lượng bản ghi đã lấy
+                pages: totalPages, //tổng số trang với điều kiện query
+                total: totalItems, // tổng số phần tử (số bản ghi)
+            },
+            result, //kết quả query
+        };
+    }
+
+    async hasApprovedLeaveToday(userId: string): Promise<boolean> {
+        const now = new Date();
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(now);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const result = await this.leaveRequestModel.findOne({
+            employee: userId,
+            status: 'APPROVED',
+            startDate: { $lte: endOfDay },
+            endDate: { $gte: startOfDay }
+        });
+        return result ? true : false;
     }
 
     // Overtime Request Methods
@@ -158,6 +212,10 @@ export class RequestsService {
                 path: "employee",
                 select: { name: 1, employeeCode: 1 }
             })
+            .populate({
+                path: "approvedBy",
+                select: { name: 1 }
+            })
             .exec();
 
         return {
@@ -171,16 +229,71 @@ export class RequestsService {
         };
     }
 
+    async findMyRemoteWorkRequests(currentPage: number, limit: number, qs: string, user: IUser) {
+        const { filter, sort, population } = aqp(qs);
+        delete filter.current;
+        delete filter.pageSize;
+        filter.employee = user._id;
+
+        let offset = (+currentPage - 1) * +limit;
+        let defaultLimit = +limit ? +limit : 10;
+
+        const totalItems = (await this.remoteWorkRequestModel.find(filter)).length;
+        const totalPages = Math.ceil(totalItems / defaultLimit);
+
+        const result = await this.remoteWorkRequestModel
+            .find(filter)
+            .skip(offset)
+            .limit(defaultLimit)
+            // @ts-ignore: Unreachable code error
+            .sort(sort)
+            .populate({
+                path: "employee",
+                select: { name: 1, employeeCode: 1 }
+            })
+            .populate({
+                path: "approvedBy",
+                select: { name: 1 }
+            })
+            .exec();
+
+        return {
+            meta: {
+                current: currentPage, //trang hiện tại
+                pageSize: limit, //số lượng bản ghi đã lấy
+                pages: totalPages, //tổng số trang với điều kiện query
+                total: totalItems, // tổng số phần tử (số bản ghi)
+            },
+            result, //kết quả query
+        };
+    }
+
+    async hasApprovedRemoteWorkToday(userId: string): Promise<boolean> {
+        const now = new Date();
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(now);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const result = await this.remoteWorkRequestModel.findOne({
+            employee: userId,
+            status: 'APPROVED',
+            startDate: { $lte: endOfDay },
+            endDate: { $gte: startOfDay }
+        });
+        return result ? true : false;
+    }
+
     async findRemoteWorkRequestById(id: string): Promise<RemoteWorkRequest> {
         return this.remoteWorkRequestModel.findById(id).exec();
     }
 
-    async updateRemoteWorkRequestStatus(id: string, status: RequestStatus, approvedBy: string, rejectionReason?: string): Promise<RemoteWorkRequest> {
+    async updateRemoteWorkRequestStatus(id: string, status: RequestStatus, user: IUser, rejectionReason?: string): Promise<RemoteWorkRequest> {
         return this.remoteWorkRequestModel.findByIdAndUpdate(
             id,
             {
                 status,
-                approvedBy,
+                approvedBy: user._id,
                 approvedAt: new Date(),
                 ...(rejectionReason && { rejectionReason }),
             },

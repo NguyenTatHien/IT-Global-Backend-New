@@ -27,6 +27,16 @@ export class RequestsController {
         return this.requestsService.findAllLeaveRequests(+currentPage, +limit, qs);
     }
 
+    @Get('leave/my-requests')
+    findMyLeaveRequests(
+        @Query("current") currentPage: string,
+        @Query("pageSize") limit: string,
+        @Query() qs: string,
+        @Req() user: any,
+    ) {
+        return this.requestsService.findMyLeaveRequests(+currentPage, +limit, qs, user.user);
+    }
+
     @Get('leave/:id')
     findLeaveRequestById(@Param('id') id: string) {
         return this.requestsService.findLeaveRequestById(id);
@@ -36,11 +46,12 @@ export class RequestsController {
     updateLeaveRequestStatus(
         @Param('id') id: string,
         @Body() updateRequestStatusDto: UpdateRequestStatusDto,
+        @Req() user: any,
     ) {
         return this.requestsService.updateLeaveRequestStatus(
             id,
             updateRequestStatusDto.status,
-            updateRequestStatusDto.approvedBy,
+            user.user,
             updateRequestStatusDto.rejectionReason,
         );
     }
@@ -118,6 +129,16 @@ export class RequestsController {
         return this.requestsService.findAllRemoteWorkRequests(+currentPage, +limit, qs);
     }
 
+    @Get('remote-work/my-requests')
+    findMyRemoteWorkRequests(
+        @Query("current") currentPage: string,
+        @Query("pageSize") limit: string,
+        @Query() qs: string,
+        @Req() user: any,
+    ) {
+        return this.requestsService.findMyRemoteWorkRequests(+currentPage, +limit, qs, user.user);
+    }
+
     @Get('remote-work/:id')
     findRemoteWorkRequestById(@Param('id') id: string) {
         return this.requestsService.findRemoteWorkRequestById(id);
@@ -127,11 +148,12 @@ export class RequestsController {
     updateRemoteWorkRequestStatus(
         @Param('id') id: string,
         @Body() updateRequestStatusDto: UpdateRequestStatusDto,
+        @Req() user: any,
     ) {
         return this.requestsService.updateRemoteWorkRequestStatus(
             id,
             updateRequestStatusDto.status,
-            updateRequestStatusDto.approvedBy,
+            user.user,
             updateRequestStatusDto.rejectionReason,
         );
     }

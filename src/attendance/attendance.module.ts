@@ -8,6 +8,7 @@ import { CompaniesService } from 'src/companies/companies.service';
 import { CompaniesModule } from 'src/companies/companies.module';
 import { FaceRecognitionModule } from 'src/face-recognition/face-recognition.module';
 import { UsersModule } from 'src/users/users.module';
+import { RequestsModule } from 'src/requests/requests.module';
 
 @Module({
     imports: [
@@ -17,7 +18,8 @@ import { UsersModule } from 'src/users/users.module';
         UserShiftsModule,
         CompaniesModule,
         FaceRecognitionModule,
-        UsersModule
+        UsersModule,
+        RequestsModule
     ],
     controllers: [AttendanceController],
     providers: [AttendanceService],

@@ -7,7 +7,9 @@ import {
     MinLength,
     IsNumber,
     IsOptional,
-    IsArray
+    IsArray,
+    Min,
+    Max
 } from "class-validator";
 import mongoose from "mongoose";
 import { Transform } from 'class-transformer';
@@ -70,6 +72,24 @@ export class CreateUserDto {
     @IsNotEmpty({ message: "Employee type không được để trống" })
     @IsString({ message: "Employee type phải là string" })
     employeeType: string;
+
+    @IsOptional()
+    @IsNumber({}, { message: "Salary phải là số" })
+    @Min(0, { message: "Salary không được âm" })
+    @Transform(({ value }) => value ? parseInt(value) : 0)
+    salary?: number;
+
+    @IsOptional()
+    @IsNumber({}, { message: "Allowance phải là số" })
+    @Min(0, { message: "Allowance không được âm" })
+    @Transform(({ value }) => value ? parseInt(value) : 0)
+    allowance?: number;
+
+    @IsOptional()
+    @IsNumber({}, { message: "Bonus phải là số" })
+    @Min(0, { message: "Bonus không được âm" })
+    @Transform(({ value }) => value ? parseInt(value) : 0)
+    bonus?: number;
 
     @IsOptional()
     @IsArray()

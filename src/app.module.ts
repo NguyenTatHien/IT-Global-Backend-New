@@ -28,6 +28,7 @@ import { DepartmentsModule } from './departments/departments.module';
 import { CompaniesModule } from './companies/companies.module';
 import { RequestsModule } from "./requests/requests.module";
 import { SalaryModule } from './salary/salary.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
     imports: [
@@ -76,6 +77,7 @@ import { SalaryModule } from './salary/salary.module';
         CompaniesModule,
         RequestsModule,
         SalaryModule,
+        DashboardModule,
     ],
     controllers: [AppController],
     providers: [

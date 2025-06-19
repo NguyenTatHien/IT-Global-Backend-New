@@ -1,4 +1,4 @@
-import { IsDate, IsEnum, IsOptional } from 'class-validator';
+import { IsDate, IsEnum, IsOptional, IsIn, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ReportType {
@@ -11,6 +11,9 @@ export enum ReportType {
 export class CreateReportDto {
     @IsEnum(ReportType)
     type: ReportType;
+
+    @IsIn(['attendance', 'leave'])
+    reportType: string;
 
     @IsDate()
     @Type(() => Date)
@@ -25,4 +28,17 @@ export class CreateReportDto {
 
     @IsOptional()
     userId?: string;
+
+    @IsOptional()
+    status?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    current?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    pageSize?: number;
 }

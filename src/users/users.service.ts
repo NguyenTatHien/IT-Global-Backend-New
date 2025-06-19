@@ -37,7 +37,7 @@ export class UsersService {
     };
 
     async create(createUserDto: CreateUserDto, @User() user: IUser, file: Express.Multer.File) {
-        const { name, email, password, age, gender, address, role, department } =
+        const { name, email, password, age, gender, address, role, department, employeeType, salary, allowance, bonus } =
             createUserDto;
         const isExistEmail = await this.userModel.findOne({ email });
         if (isExistEmail) {
@@ -64,6 +64,38 @@ export class UsersService {
         const faceDescriptor = await this.faceRecognitionService.processFace(imagePath);
         if (!faceDescriptor) throw new BadRequestException('Không phát hiện khuôn mặt');
 
+        // Thiết lập giá trị lương mặc định theo loại nhân viên
+        let defaultSalary = 0;
+        let defaultAllowance = 0;
+        let defaultBonus = 0;
+
+        switch (employeeType) {
+            case 'official':
+                // Nhân viên chính thức: Lương cơ bản cao, phụ cấp đầy đủ
+                defaultSalary = salary || 15000000; // 15 triệu mặc định
+                defaultAllowance = allowance || 500000; // 500k phụ cấp
+                defaultBonus = bonus || 1000000; // 1 triệu thưởng
+                break;
+            case 'contract':
+                // Nhân viên hợp đồng: Lương cơ bản trung bình
+                defaultSalary = salary || 12000000; // 12 triệu mặc định
+                defaultAllowance = allowance || 300000; // 300k phụ cấp
+                defaultBonus = bonus || 500000; // 500k thưởng
+                break;
+            case 'intern':
+                // Thực tập sinh: Không có lương cơ bản, chỉ có trợ cấp
+                defaultSalary = 0; // Thực tập sinh không có lương cơ bản
+                defaultAllowance = allowance || 3000000; // 3 triệu trợ cấp thực tập
+                defaultBonus = bonus || 200000; // 200k thưởng
+                break;
+            default:
+                // Mặc định như nhân viên chính thức
+                defaultSalary = salary || 15000000;
+                defaultAllowance = allowance || 500000;
+                defaultBonus = bonus || 1000000;
+                break;
+        }
+
         let newUser = await this.userModel.create({
             name,
             email,
@@ -72,6 +104,10 @@ export class UsersService {
             gender,
             address,
             role,
+            employeeType,
+            salary: defaultSalary,
+            allowance: defaultAllowance,
+            bonus: defaultBonus,
             image: `${employeeCode}/${fileName}`,
             faceDescriptors: [faceDescriptor],
             faceCount: 1,
@@ -216,12 +252,12 @@ export class UsersService {
             .select("faceDescriptors")
     }
 
-    async findOneByUsername(username: string) {
+    async findOneByUsername(employeeCode: string) {
         return await this.userModel
             .findOne({
-                email: username,
+                employeeCode: employeeCode,
             })
-            .populate({ path: "role", select: { name: 1 } });
+            .populate({ path: "role", select: { name: 1 } })
     }
 
     isValidPassword(password: string, hash: string) {
@@ -242,16 +278,6 @@ export class UsersService {
         let fileName = foundUser.image;
 
         if (file) {
-            // const faceDescriptorsCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
-            // if (!faceDescriptorsCompare) {
-            //     throw new BadRequestException('Không phát hiện được khuôn mặt trong ảnh');
-            // }
-            // const similarity = await this.faceRecognitionService.calculateFaceSimilarity(faceDescriptors[0], faceDescriptorsCompare);
-            // console.log((similarity as any).distance);
-            // if ((similarity as any).distance > 0.5) {
-            //     throw new BadRequestException('Khuôn mặt đăng ký quá khác so với khuôn mặt đã đăng ký');
-            // }
-
             const userDir = path.join(__dirname, '../../face-stored', foundUser.employeeCode);
             if (!fs.existsSync(userDir)) {
                 fs.mkdirSync(userDir, { recursive: true });
@@ -268,8 +294,42 @@ export class UsersService {
             faceDescriptors = [newFaceDescriptor];
         }
 
+        // Xử lý cập nhật thông tin lương
+        let updatedSalary = foundUser.salary;
+        let updatedAllowance = foundUser.allowance;
+        let updatedBonus = foundUser.bonus;
+
+        // Nếu có cập nhật employeeType, tự động điều chỉnh lương theo loại mới
+        if (updateUserDto.employeeType && updateUserDto.employeeType !== foundUser.employeeType) {
+            switch (updateUserDto.employeeType) {
+                case 'official':
+                    updatedSalary = updateUserDto.salary ?? 15000000;
+                    updatedAllowance = updateUserDto.allowance ?? 500000;
+                    updatedBonus = updateUserDto.bonus ?? 1000000;
+                    break;
+                case 'contract':
+                    updatedSalary = updateUserDto.salary ?? 12000000;
+                    updatedAllowance = updateUserDto.allowance ?? 300000;
+                    updatedBonus = updateUserDto.bonus ?? 500000;
+                    break;
+                case 'intern':
+                    updatedSalary = 0; // Thực tập sinh không có lương cơ bản
+                    updatedAllowance = updateUserDto.allowance ?? 3000000;
+                    updatedBonus = updateUserDto.bonus ?? 200000;
+                    break;
+            }
+        } else {
+            // Cập nhật lương theo giá trị được cung cấp
+            if (updateUserDto.salary !== undefined) updatedSalary = updateUserDto.salary;
+            if (updateUserDto.allowance !== undefined) updatedAllowance = updateUserDto.allowance;
+            if (updateUserDto.bonus !== undefined) updatedBonus = updateUserDto.bonus;
+        }
+
         const updatedData = {
             ...updateUserDto,
+            salary: updatedSalary,
+            allowance: updatedAllowance,
+            bonus: updatedBonus,
             ...(file && { image: `${foundUser.employeeCode}/${fileName}` }),
             faceDescriptors,
             updatedBy: {

@@ -44,7 +44,7 @@ export class AuthController {
     @ResponseMessage("User Login")
     @UseInterceptors(FileInterceptor('image'))
     async login(@UploadedFile() file: Express.Multer.File, @Res({ passthrough: true }) response: Response) {
-        const result = await this.authService.login(file);
+        const result = await this.authService.login(file, response);
         return result;
     }
 
@@ -77,13 +77,13 @@ export class AuthController {
     @Public()
     @ResponseMessage("Get user by refresh token")
     @Get("refresh")
-    handleRefreshToken(
+    async handleRefreshToken(
         @Req() request: Request,
         @Res({ passthrough: true }) response: Response,
     ) {
         const refreshToken = request.cookies["refresh_token"];
 
-        return this.authService.processNewToken(refreshToken, response);
+        return await this.authService.processNewToken(refreshToken, response);
     }
 
     @ResponseMessage("Logout User")

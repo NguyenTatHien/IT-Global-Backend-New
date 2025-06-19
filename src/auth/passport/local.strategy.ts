@@ -18,10 +18,10 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
         );
     }
 
-    async validate(username: string, password: string): Promise<any> {
-        const user = await this.authService.validateUser(username, password);
+    async validate(employeeCode: string, password: string): Promise<any> {
+        const user = await this.authService.validateUser(employeeCode, password);
         if (!user) {
-            throw new UnauthorizedException("Username/password không hợp lệ");
+            throw new UnauthorizedException("Mã nhân viên/Mật khẩu không hợp lệ");
         }
         return user;
     }

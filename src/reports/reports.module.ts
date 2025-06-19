@@ -6,6 +6,7 @@ import { Attendance, AttendanceSchema } from '../attendance/schemas/attendance.s
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { Shift, ShiftSchema } from '../shifts/schemas/shift.schema';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { LeaveRequest, LeaveRequestSchema } from '../requests/schemas/leave-request.schema';
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { PermissionsModule } from '../permissions/permissions.module';
             { name: Attendance.name, schema: AttendanceSchema },
             { name: User.name, schema: UserSchema },
             { name: Shift.name, schema: ShiftSchema },
+            { name: LeaveRequest.name, schema: LeaveRequestSchema },
         ]),
         PermissionsModule
     ],

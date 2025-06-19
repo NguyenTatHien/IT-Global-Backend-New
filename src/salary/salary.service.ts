@@ -90,61 +90,24 @@ export class SalaryService {
                 isDeleted: false
             });
 
-            // Tính lương cơ bản
-            const baseSalary = user.salary || 0;
-
-            // Tính lương làm thêm giờ
-            let overtimePay = 0;
-            const overtimeRate = 1.5; // Hệ số làm thêm giờ
-            attendances.forEach(attendance => {
-                if (attendance.overtimeHours > 0) {
-                    const hourlyRate = baseSalary / (8 * 22); // Lương theo giờ
-                    overtimePay += attendance.overtimeHours * hourlyRate * overtimeRate;
-                }
-            });
-
-            // Tính phụ cấp
-            const allowance = user.allowance || 0;
-
-            // Tính thưởng
-            const bonus = user.bonus || 0;
-
-            // Tính khấu trừ
-            let deduction = 0;
-            const latePenalty = 50000; // Phạt đi muộn
-            const absentPenalty = 200000; // Phạt vắng mặt
-            const earlyPenalty = 30000; // Phạt về sớm
-
-            attendances.forEach(attendance => {
-                switch (attendance.status) {
-                    case 'late':
-                        deduction += latePenalty;
-                        break;
-                    case 'absent':
-                        deduction += absentPenalty;
-                        break;
-                    case 'early':
-                        deduction += earlyPenalty;
-                        break;
-                }
-            });
-
-            // Tính tổng lương
-            const totalSalary = baseSalary + overtimePay + allowance + bonus - deduction;
+            // Sử dụng logic tính lương mới theo loại nhân viên
+            const totalDays = endDate.getDate();
+            const salaryDetails = this.calculateSalaryDetails(user, attendances, totalDays);
 
             // Tạo bản ghi lương
             const salary = new this.salaryModel({
                 userId,
                 month,
                 year,
-                baseSalary,
-                overtimePay,
-                allowance,
-                bonus,
-                deduction,
-                totalSalary,
+                baseSalary: salaryDetails.baseSalary,
+                overtimePay: salaryDetails.overtimePay,
+                allowance: salaryDetails.allowance,
+                bonus: salaryDetails.bonus,
+                deduction: salaryDetails.deduction,
+                totalSalary: salaryDetails.totalSalary,
                 status: 'pending',
-                note: `Tính lương tháng ${month}/${year} dựa trên ${attendances.length} ngày chấm công`
+                note: `Tính lương tháng ${month}/${year} cho ${user.employeeType === 'official' ? 'Nhân viên chính thức' :
+                    user.employeeType === 'contract' ? 'Nhân viên hợp đồng' : 'Thực tập sinh'} - ${attendances.length} ngày chấm công`
             });
 
             await salary.save();
@@ -281,44 +244,124 @@ export class SalaryService {
         }
     }
 
-    // Thuật toán tính lương tổng quát
+    // Thuật toán tính lương tổng quát - Cải tiến theo loại nhân viên
     private calculateSalaryDetails(user: any, attendances: any[], totalDaysInMonth: number, bonus: number = 0, deduction: number = 0) {
-        const baseSalary = user.salary || 0;
+        let baseSalary = 0;
         let overtimePay = 0;
-        const overtimeRate = 1.5;
-        attendances.forEach(att => {
-            if (att.overtimeHours > 0) {
-                const hourlyRate = baseSalary / (8 * totalDaysInMonth);
-                overtimePay += att.overtimeHours * hourlyRate * overtimeRate;
-            }
-        });
-        const allowance = user.allowance || 0;
-        const totalBonus = (user.bonus || 0) + bonus;
+        let allowance = 0;
+        let totalBonus = 0;
         let totalDeduction = deduction;
-        const latePenalty = 50000;
-        const absentPenalty = 200000;
-        const earlyPenalty = 30000;
-        attendances.forEach(att => {
-            switch (att.status) {
-                case 'late':
-                    totalDeduction += latePenalty;
-                    break;
-                case 'absent':
-                    totalDeduction += absentPenalty;
-                    break;
-                case 'early':
-                    totalDeduction += earlyPenalty;
-                    break;
-            }
-        });
+
+        // Tính lương theo loại nhân viên
+        switch (user.employeeType) {
+            case 'official':
+                // Nhân viên chính thức: Lương cơ bản + làm thêm giờ + phụ cấp
+                baseSalary = user.salary || 0;
+                allowance = user.allowance || 0;
+                totalBonus = (user.bonus || 0) + bonus;
+
+                // Tính lương làm thêm giờ cho nhân viên chính thức
+                const overtimeRate = 1.5;
+                attendances.forEach(att => {
+                    if (att.overtimeHours > 0) {
+                        const hourlyRate = baseSalary / (8 * 22); // 8 giờ/ngày, 22 ngày/tháng
+                        overtimePay += att.overtimeHours * hourlyRate * overtimeRate;
+                    }
+                });
+                break;
+
+            case 'contract':
+                // Nhân viên hợp đồng: Lương cơ bản + làm thêm giờ (hệ số thấp hơn)
+                baseSalary = user.salary || 0;
+                allowance = user.allowance || 0;
+                totalBonus = (user.bonus || 0) + bonus;
+
+                // Làm thêm giờ với hệ số thấp hơn
+                const contractOvertimeRate = 1.2;
+                attendances.forEach(att => {
+                    if (att.overtimeHours > 0) {
+                        const hourlyRate = baseSalary / (8 * 22);
+                        overtimePay += att.overtimeHours * hourlyRate * contractOvertimeRate;
+                    }
+                });
+                break;
+
+            case 'intern':
+                // Thực tập sinh: Chỉ có trợ cấp thực tập, không có lương cơ bản
+                baseSalary = 0; // Thực tập sinh không có lương cơ bản
+                allowance = user.allowance || 0; // Trợ cấp thực tập
+                totalBonus = (user.bonus || 0) + bonus;
+
+                // Thực tập sinh không được tính lương làm thêm giờ
+                overtimePay = 0;
+
+                // Giảm mức phạt cho thực tập sinh
+                const internLatePenalty = 20000; // Giảm từ 50,000 xuống 20,000
+                const internAbsentPenalty = 100000; // Giảm từ 200,000 xuống 100,000
+                const internEarlyPenalty = 15000; // Giảm từ 30,000 xuống 15,000
+
+                attendances.forEach(att => {
+                    switch (att.status) {
+                        case 'late':
+                            totalDeduction += internLatePenalty;
+                            break;
+                        case 'absent':
+                            totalDeduction += internAbsentPenalty;
+                            break;
+                        case 'early':
+                            totalDeduction += internEarlyPenalty;
+                            break;
+                    }
+                });
+                break;
+
+            default:
+                // Mặc định như nhân viên chính thức
+                baseSalary = user.salary || 0;
+                allowance = user.allowance || 0;
+                totalBonus = (user.bonus || 0) + bonus;
+
+                const defaultOvertimeRate = 1.5;
+                attendances.forEach(att => {
+                    if (att.overtimeHours > 0) {
+                        const hourlyRate = baseSalary / (8 * 22);
+                        overtimePay += att.overtimeHours * hourlyRate * defaultOvertimeRate;
+                    }
+                });
+                break;
+        }
+
+        // Tính khấu trừ cho nhân viên chính thức và hợp đồng
+        if (user.employeeType !== 'intern') {
+            const latePenalty = 50000;
+            const absentPenalty = 200000;
+            const earlyPenalty = 30000;
+
+            attendances.forEach(att => {
+                switch (att.status) {
+                    case 'late':
+                        totalDeduction += latePenalty;
+                        break;
+                    case 'absent':
+                        totalDeduction += absentPenalty;
+                        break;
+                    case 'early':
+                        totalDeduction += earlyPenalty;
+                        break;
+                }
+            });
+        }
+
         const totalSalary = baseSalary + overtimePay + allowance + totalBonus - totalDeduction;
+
         return {
             baseSalary,
             overtimePay,
             allowance,
             bonus: totalBonus,
             deduction: totalDeduction,
-            totalSalary
+            totalSalary,
+            employeeType: user.employeeType
         };
     }
 

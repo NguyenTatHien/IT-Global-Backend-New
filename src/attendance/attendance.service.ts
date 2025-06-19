@@ -379,13 +379,20 @@ export class AttendanceService {
             const skip = (current - 1) * pageSize;
             const result = await this.attendanceModel
                 .find(mongoQuery)
+                .populate({ path: 'userShiftId', select: { shiftId: 1 } })
                 .populate({ path: 'userId', select: { name: 1, _id: 1, employeeCode: 1 } })
-                .populate({ path: 'userShiftId', select: { name: 1, _id: 1 } })
                 .sort(sortObj)
                 .skip(skip)
                 .limit(pageSize)
                 .lean()
                 .exec();
+            const userShift = await this.userShiftsService.findById(result[0]?.userShiftId);
+            const finalResult = result.map(item => {
+                return {
+                    ...item,
+                    userShift: userShift.shiftId.name
+                }
+            });
             const total = await this.attendanceModel.countDocuments(mongoQuery);
 
             // Transform data to include formatted dates
@@ -441,7 +448,7 @@ export class AttendanceService {
                     total: Number(total),
                     pages: Math.ceil(total / pageSize)
                 },
-                result,
+                result: finalResult,
             };
         } catch (error) {
             throw error;

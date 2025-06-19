@@ -21,8 +21,8 @@ export class AuthService {
         private faceRecognitionService: FaceRecognitionService,
     ) { }
 
-    async validateUser(username: string, pass: string): Promise<any> {
-        const user = await this.usersService.findOneByUsername(username);
+    async validateUser(employeeCode: string, pass: string): Promise<any> {
+        const user = await this.usersService.findOneByUsername(employeeCode);
         if (user) {
             const isValid = this.usersService.isValidPassword(
                 pass,
@@ -70,7 +70,7 @@ export class AuthService {
     }
 
     async login1(user: IUser, response: Response) {
-        const { _id, name, email, role, permissions, image } = user;
+        const { _id, name, email, role, permissions, image, employeeCode } = user;
         const payload = {
             sub: "token login",
             iss: "from server",
@@ -79,6 +79,7 @@ export class AuthService {
             image,
             email,
             role,
+            employeeCode,
         };
 
         const refresh_token = this.createRefreshToken(payload);
@@ -101,11 +102,12 @@ export class AuthService {
                 email,
                 role,
                 permissions,
+                employeeCode,
             },
         };
     }
 
-    async login(file: Express.Multer.File) {
+    async login(file: Express.Multer.File, response: Response) {
         try {
             const realFace = await this.faceRecognitionService.checkRealFace(file);
             if (realFace.isReal === false) {
@@ -143,8 +145,21 @@ export class AuthService {
                 role: {
                     _id: roleDetails._id,
                     name: roleDetails.name
-                }
+                },
+                employeeCode: matchedUser.employeeCode,
             };
+
+            const refresh_token = this.createRefreshToken(payload);
+
+            // Update user with refresh token
+            await this.usersService.updateUserToken(refresh_token, matchedUser._id);
+
+            // Set refresh_token as cookies
+            response.cookie("refresh_token", refresh_token, {
+                httpOnly: true,
+                maxAge:
+                    ms(this.configService.get<string>("JWT_REFRESH_EXPIRE")) * 1000,
+            });
 
             const token = this.jwtService.sign(payload);
 
@@ -159,7 +174,8 @@ export class AuthService {
                             _id: roleDetails._id,
                             name: roleDetails.name
                         },
-                        permissions: roleDetails.permissions
+                        permissions: roleDetails.permissions,
+                        employeeCode: matchedUser.employeeCode,
                     }
                 }
             };
@@ -227,14 +243,16 @@ export class AuthService {
             let user = await this.usersService.findUserByToken(refreshToken);
             if (user) {
                 // Update refresh_token
-                const { _id, name, email, role } = user;
+                const { _id, name, email, role, image, employeeCode } = user;
                 const payload = {
                     sub: "token refresh",
                     iss: "from server",
                     _id,
                     name,
                     email,
+                    image,
                     role,
+                    employeeCode,
                 };
 
                 const refresh_token = this.createRefreshToken(payload);
@@ -276,14 +294,10 @@ export class AuthService {
                     },
                 };
             } else {
-                throw new BadRequestException(
-                    `Tài khoản của bạn đã hết hạn. Vui lòng login lại`,
-                );
+                throw new UnauthorizedException("Tài khoản của bạn đã hết hạn. Vui lòng login lại");
             }
         } catch (error) {
-            throw new BadRequestException(
-                `Tài khoản của bạn đã hết hạn. Vui lòng login lại`,
-            );
+            throw new BadRequestException("Tài khoản của bạn đã hết hạn. Vui lòng login lại");
         }
     };
 

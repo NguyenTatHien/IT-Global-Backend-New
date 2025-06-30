@@ -109,10 +109,10 @@ export class AuthService {
 
     async login(file: Express.Multer.File, response: Response) {
         try {
-            const realFace = await this.faceRecognitionService.checkRealFace(file);
-            if (realFace.isReal === false) {
-                throw new UnauthorizedException(realFace.message);
-            }
+            // const realFace = await this.faceRecognitionService.checkRealFace(file);
+            // if (realFace.isReal === false) {
+            //     throw new UnauthorizedException(realFace.message);
+            // }
             // Process face recognition
             const faceDescriptorsCompare = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
 

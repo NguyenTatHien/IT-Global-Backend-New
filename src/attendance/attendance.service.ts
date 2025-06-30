@@ -50,10 +50,10 @@ export class AttendanceService {
         if (!location) {
             throw new Error('Vị trí không được để trống');
         }
-        const fakeFaceResult = await this.faceRecognitionService.checkRealFace(file);
-        if (fakeFaceResult.isReal === false) {
-            throw new Error('Vui lòng đưa mặt thật vào camera');
-        }
+        // const fakeFaceResult = await this.faceRecognitionService.checkRealFace(file);
+        // if (fakeFaceResult.isReal === false) {
+        //     throw new Error('Vui lòng đưa mặt thật vào camera');
+        // }
         // Xác thực khuôn mặt
         const faceResult = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
         if (!faceResult) {
@@ -154,10 +154,10 @@ export class AttendanceService {
                 throw new Error('Khuôn mặt không được để trống');
             }
 
-            const fakeFaceResult = await this.faceRecognitionService.checkRealFace(file);
-            if (fakeFaceResult.isReal === false) {
-                throw new Error('Vui lòng đưa mặt thật vào camera');
-            }
+            // const fakeFaceResult = await this.faceRecognitionService.checkRealFace(file);
+            // if (fakeFaceResult.isReal === false) {
+            //     throw new Error('Vui lòng đưa mặt thật vào camera');
+            // }
             // Xác thực khuôn mặt
             const faceResult = await this.faceRecognitionService.processFaceFromBuffer(file.buffer);
             if (!faceResult) {
